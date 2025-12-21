@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -13,122 +14,103 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// --- STATE MANAGEMENT ---
-
-// 1. Define what a Room's state looks like
-type RoomState struct {
-	VideoID   int     `json:"video_id"`
-	Timestamp float64 `json:"timestamp"`
-	Playing   bool    `json:"playing"`
-}
-
-// 2. Maps
-var rooms = make(map[string]map[*websocket.Conn]bool) // Active connections
-var roomStates = make(map[string]*RoomState)          // Last known state of the room
-var mutex = &sync.Mutex{}
-
-type Message struct {
-	Type      string  `json:"type"` // "chat", "play", "pause", "seek", "sync_request"
-	Username  string  `json:"username"`
-	Content   string  `json:"content"`
-	Timestamp float64 `json:"timestamp"`
-	VideoID   int     `json:"video_id"`
-	Room      string  `json:"room"`
-}
-
 func main() {
 	http.HandleFunc("/ws", handleConnections)
-	fmt.Println("🚀 Smart Server (State Aware) started on :8080")
+
+	// --- NEW: DEBUG LOGGER ---
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		for range ticker.C {
+			// LOCK to read safely
+			mutex.Lock()
+			for id, room := range rooms {
+				currentState := "Paused"
+				realTime := room.Timestamp
+
+				if room.Playing {
+					currentState = "Playing"
+					elapsed := time.Since(room.LastUpdated).Seconds()
+					realTime += elapsed
+				}
+
+				fmt.Printf("⏱️ [Room %s] Status: %s | Base: %.2f | Calculated Time: %.2f\n",
+					id, currentState, room.Timestamp, realTime)
+			}
+			mutex.Unlock()
+		}
+	}()
+	// -------------------------
+
+	fmt.Println("🚀 Modular Server (Sync Fixed) started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
+	// 1. SETUP
 	roomID := r.URL.Query().Get("room")
+	username := r.URL.Query().Get("username")
 	if roomID == "" {
 		roomID = "general"
+	}
+	if username == "" {
+		username = "Anon"
 	}
 
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer ws.Close()
 
-	mutex.Lock()
-	// Init room map if needed
-	if rooms[roomID] == nil {
-		rooms[roomID] = make(map[*websocket.Conn]bool)
+	clientID := uuid.New().String()
+
+	// 2. JOIN ROOM (Logic moved to room_manager.go)
+	isHost, realTime, isPlaying := JoinRoom(roomID, username, ws, clientID)
+
+	// 3. SEND WELCOME PACKETS
+	ws.WriteJSON(Message{Type: "identity", UserID: clientID, IsHost: isHost})
+
+	status := "paused"
+	if isPlaying {
+		status = "playing"
 	}
-	// Init room state if needed (Start at 0:00, Paused)
-	if roomStates[roomID] == nil {
-		roomStates[roomID] = &RoomState{VideoID: 0, Timestamp: 0, Playing: false}
-	}
-	rooms[roomID][ws] = true
+	ws.WriteJSON(Message{Type: "sync_state", Timestamp: realTime, Content: status})
 
-	// 3. IMMEDIATE SYNC: Send the current state to the NEW user only
-	currentState := roomStates[roomID]
+	BroadcastUserList(roomID)
 
-	// Prepare the sync message
-	syncMsg := Message{
-		Type:      "sync_state", // Special type for new joiners
-		VideoID:   currentState.VideoID,
-		Timestamp: currentState.Timestamp,
-		// If playing is true, we might calculate "Time + (Now - LastUpdate)",
-		// but for simplicity, we just send the last known timestamp.
-	}
+	// 4. CLEANUP ON EXIT
+	defer func() {
+		ws.Close()
+		HandleDisconnect(roomID, clientID)
+	}()
 
-	// If the room is playing, tell the client to play.
-	if currentState.Playing {
-		syncMsg.Content = "playing"
-	} else {
-		syncMsg.Content = "paused"
-	}
-
-	ws.WriteJSON(syncMsg)
-	mutex.Unlock()
-
-	fmt.Printf("✅ Client joined %s. Sent state: %v\n", roomID, currentState)
-
+	// 5. MESSAGE LOOP
 	for {
 		var msg Message
 		err := ws.ReadJSON(&msg)
 		if err != nil {
-			mutex.Lock()
-			delete(rooms[roomID], ws)
-			if len(rooms[roomID]) == 0 {
-				delete(rooms, roomID)
-				delete(roomStates, roomID) // Clean up state if empty
-			}
-			mutex.Unlock()
 			break
 		}
 
 		msg.Room = roomID
+		msg.UserID = clientID
 
-		// 4. UPDATE STATE based on the message
-		mutex.Lock()
-		if state, exists := roomStates[roomID]; exists {
-			if msg.Type == "play" {
-				state.Playing = true
-				state.Timestamp = msg.Timestamp
-				state.VideoID = msg.VideoID
-			} else if msg.Type == "pause" {
-				state.Playing = false
-				state.Timestamp = msg.Timestamp
-			} else if msg.Type == "seek" {
-				state.Timestamp = msg.Timestamp
+		// Route Commands
+		switch msg.Type {
+		case "play", "pause", "seek":
+			// Update state internally, return true if we should broadcast
+			if HandleVideoCommand(roomID, clientID, msg) {
+				Broadcast(roomID, msg)
 			}
+
+		case "grant_control", "revoke_control":
+			HandleAdminCommand(roomID, clientID, msg)
+			BroadcastUserList(roomID)
+
+		case "chat":
+			Broadcast(roomID, msg)
+
+		case "request_control":
+			Broadcast(roomID, msg)
 		}
-		mutex.Unlock()
-
-		broadcastToRoom(roomID, msg)
-	}
-}
-
-func broadcastToRoom(roomID string, msg Message) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	for client := range rooms[roomID] {
-		client.WriteJSON(msg)
 	}
 }

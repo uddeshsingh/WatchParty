@@ -216,3 +216,176 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
 }
+
+.host-badge {
+    background: #eab308;
+    color: black;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.request-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.control-overlay {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    pointer-events: none; /* Let clicks pass through */
+}
+
+.requests-overlay {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.request-card {
+    background: #222;
+    border: 1px solid #444;
+    padding: 10px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+.request-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-approve {
+    background: #22c55e;
+    color: white;
+    border: none;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-deny {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- MISSING NAVBAR ALIGNMENT --- */
+.nav-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.room-badge, .user-badge {
+  background: #333;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: 1px solid #444;
+}
+
+/* --- CUSTOM VIDEO CONTROLS --- */
+.custom-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 20;
+    transition: opacity 0.3s;
+}
+
+.player-wrapper:hover .custom-controls {
+    opacity: 1;
+}
+
+/* LEFT & RIGHT */
+.controls-left, .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* CENTER (Seek bar) */
+.controls-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* BUTTONS */
+.btn-control {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    opacity: 0.9;
+}
+.btn-control:hover { opacity: 1; color: var(--primary); }
+
+/* SLIDERS */
+.seek-slider {
+    flex: 1;
+    cursor: pointer;
+}
+.volume-slider {
+    width: 60px;
+    cursor: pointer;
+}
+
+/* TEXT */
+.time-text {
+    font-size: 0.8rem;
+    color: #ddd;
+    font-family: monospace;
+}
+
+.guest-status {
+    width: 100%;
+    text-align: center;
+    color: #aaa;
+    font-size: 0.9rem;
+    font-style: italic;
+}
