@@ -1,0 +1,25 @@
+/* src/index.css */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  background-color: #0f0f0f; /* Match our dark theme */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  display: block; /* VITE DEFAULT IS FLEX, WE WANT BLOCK */
+  min-width: 100vw;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100vh; /* Force full height */
+  margin: 0;
+  padding: 0;
+  max-width: none; /* KEY FIX: REMOVE WIDTH LIMIT */
+  text-align: left; /* KEY FIX: REMOVE CENTERING */
+}
