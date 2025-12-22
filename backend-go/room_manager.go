@@ -168,6 +168,30 @@ func HandleDisconnect(roomID, clientID string) {
 	BroadcastUserList(roomID)
 }
 
+func HandleChangeVideo(roomID, clientID string, msg Message) bool {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	room := rooms[roomID]
+	if room == nil {
+		return false
+	}
+
+	// Only Host can change the video
+	sender := room.Clients[clientID]
+	if sender == nil || !sender.IsHost {
+		return false
+	}
+
+	// RESET STATE
+	room.VideoID = msg.VideoID
+	room.Timestamp = 0   // <--- THE FIX: Reset time to 0
+	room.Playing = false // Pause automatically
+	room.LastUpdated = time.Now()
+
+	return true // Broadcast this change
+}
+
 // --- 4. BROADCAST HELPERS ---
 
 func Broadcast(roomID string, msg Message) {

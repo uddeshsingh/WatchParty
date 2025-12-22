@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -16,30 +15,6 @@ var upgrader = websocket.Upgrader{
 
 func main() {
 	http.HandleFunc("/ws", handleConnections)
-
-	// --- NEW: DEBUG LOGGER ---
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		for range ticker.C {
-			// LOCK to read safely
-			mutex.Lock()
-			for id, room := range rooms {
-				currentState := "Paused"
-				realTime := room.Timestamp
-
-				if room.Playing {
-					currentState = "Playing"
-					elapsed := time.Since(room.LastUpdated).Seconds()
-					realTime += elapsed
-				}
-
-				fmt.Printf("⏱️ [Room %s] Status: %s | Base: %.2f | Calculated Time: %.2f\n",
-					id, currentState, room.Timestamp, realTime)
-			}
-			mutex.Unlock()
-		}
-	}()
-	// -------------------------
 
 	fmt.Println("🚀 Modular Server (Sync Fixed) started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -102,12 +77,20 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				Broadcast(roomID, msg)
 			}
 
+		case "new_video":
+			Broadcast(roomID, msg)
+
 		case "grant_control", "revoke_control":
 			HandleAdminCommand(roomID, clientID, msg)
 			BroadcastUserList(roomID)
 
 		case "chat":
 			Broadcast(roomID, msg)
+
+		case "change_video":
+			if HandleChangeVideo(roomID, clientID, msg) {
+				Broadcast(roomID, msg)
+			}
 
 		case "request_control":
 			Broadcast(roomID, msg)
