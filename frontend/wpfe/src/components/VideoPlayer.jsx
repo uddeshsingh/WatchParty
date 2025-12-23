@@ -1,63 +1,24 @@
-import React, { useState, useRef, forwardRef, useEffect } from "react"; // <--- Added useEffect
+import React, { useState, useRef, forwardRef, useEffect } from "react";
 import ReactPlayer from "react-player";
 import screenfull from "screenfull";
 import { FaVolumeUp, FaVolumeMute, FaExpand } from "react-icons/fa";
 
-const GuestControls = ({
-  volume,
-  muted,
-  onVolumeChange,
-  onToggleMute,
-  onToggleFullscreen,
-  playing,
-}) => (
-  <div
-    className="custom-controls"
-    style={{
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      background: "rgba(0,0,0,0.7)",
-      padding: "10px",
-      display: "flex",
-      gap: "15px",
-      alignItems: "center",
-      zIndex: 20,
-    }}
-  >
-    <div style={{ flex: 1, color: "#aaa", fontSize: "0.9rem" }}>
+const GuestControls = ({ volume, muted, onVolumeChange, onToggleMute, onToggleFullscreen, playing }) => (
+  <div className="custom-controls">
+    <div className="controls-text">
       {playing ? "▶ Now Playing" : "⏸ Paused by Host"}
     </div>
-    <button
-      onClick={onToggleMute}
-      style={{
-        background: "none",
-        border: "none",
-        color: "white",
-        cursor: "pointer",
-      }}
-    >
+    <button onClick={onToggleMute} className="controls-icon-btn">
       {muted || volume === 0 ? <FaVolumeMute /> : <FaVolumeUp />}
     </button>
     <input
       type="range"
-      min={0}
-      max={1}
-      step="0.1"
+      min={0} max={1} step="0.1"
       value={muted ? 0 : volume}
       onChange={onVolumeChange}
-      style={{ width: "60px", cursor: "pointer" }}
+      className="volume-slider"
     />
-    <button
-      onClick={onToggleFullscreen}
-      style={{
-        background: "none",
-        border: "none",
-        color: "white",
-        cursor: "pointer",
-      }}
-    >
+    <button onClick={onToggleFullscreen} className="controls-icon-btn">
       <FaExpand />
     </button>
   </div>
@@ -72,12 +33,10 @@ const VideoPlayer = forwardRef(
     const lastProgressRef = useRef(0);
     const isRestoring = useRef(false);
 
-    // --- NEW: Reset history when URL changes ---
     useEffect(() => {
       lastProgressRef.current = 0;
       isRestoring.current = false;
     }, [url]);
-    // ------------------------------------------
 
     const toggleFullscreen = () => {
       if (screenfull.isEnabled && wrapperRef.current)
@@ -89,19 +48,11 @@ const VideoPlayer = forwardRef(
       setMuted(newVol === 0);
     };
     const handleToggleMute = () => {
-      if (muted) {
-        setVolume(0.8);
-        setMuted(false);
-      } else {
-        setMuted(true);
-      }
+      if (muted) { setVolume(0.8); setMuted(false); } 
+      else { setMuted(true); }
     };
     const getCurrentTime = () => {
-      if (
-        ref &&
-        ref.current &&
-        typeof ref.current.getCurrentTime === "function"
-      )
+      if (ref && ref.current && typeof ref.current.getCurrentTime === "function")
         return ref.current.getCurrentTime();
       return 0;
     };
@@ -119,37 +70,14 @@ const VideoPlayer = forwardRef(
     };
 
     return (
-      <div
-        className="player-wrapper"
-        ref={wrapperRef}
-        style={{
-          position: "relative",
-          background: "black",
-          width: "100%",
-          height: "100%",
-        }}
-      >
-        {!isHost && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: "50px",
-              zIndex: 10,
-              cursor: "not-allowed",
-              background: "transparent",
-            }}
-          />
-        )}
+      <div className="player-wrapper" ref={wrapperRef}>
+        {!isHost && <div className="blocker-overlay" />}
 
         <ReactPlayer
           key={isHost ? "host-player" : "guest-player"}
           ref={ref}
           url={url}
-          width="100%"
-          height="100%"
+          width="100%" height="100%"
           controls={isHost}
           playing={playing}
           muted={muted}
@@ -158,8 +86,7 @@ const VideoPlayer = forwardRef(
           onReady={() => {
             if (lastProgressRef.current > 1) {
               isRestoring.current = true;
-              if (ref.current)
-                ref.current.seekTo(lastProgressRef.current, "seconds");
+              if (ref.current) ref.current.seekTo(lastProgressRef.current, "seconds");
             }
             if (onReady) onReady();
           }}
@@ -172,17 +99,10 @@ const VideoPlayer = forwardRef(
             if (isRestoring.current && diff < 1) isRestoring.current = false;
             lastProgressRef.current = current;
           }}
-          onPlay={() => {
-            if (onPlay) onPlay(getCurrentTime());
-          }}
-          onPause={() => {
-            if (onPause) onPause(getCurrentTime());
-          }}
+          onPlay={() => { if (onPlay) onPlay(getCurrentTime()); }}
+          onPause={() => { if (onPause) onPause(getCurrentTime()); }}
           onSeek={(seconds) => {
-            if (isRestoring.current) {
-              isRestoring.current = false;
-              return;
-            }
+            if (isRestoring.current) { isRestoring.current = false; return; }
             lastProgressRef.current = seconds;
             if (onSeek) onSeek(seconds);
           }}

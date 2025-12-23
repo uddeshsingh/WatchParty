@@ -83,24 +83,29 @@ export const useWatchParty = () => {
       setPlaying(false);
     }
 
-    // 4. CHANGE VIDEO (New Logic)
+    // 4. CHANGE VIDEO (Corrected & Dynamic)
     if (msg.type === "change_video") {
       console.log("🎬 Switching to Video ID:", msg.video_id);
       const nextVideo = videos.find((v) => v.id === msg.video_id);
 
       if (nextVideo) {
+        isReady.current = false; // Prevent premature syncing
         setCurrentVideo(nextVideo);
-        setPlaying(false); // Force pause
-        playerSeekTo(0); // Force time to 0
+        setPlaying(false); 
+        playerSeekTo(0); 
         remoteState.current = null;
       } else {
-        // If we don't have the video in our list yet (rare race condition), refresh
+        // Fallback: Fetch latest list if video is missing
+        const host = window.location.hostname; // <--- Dynamic Host
         axios
-          .get(`http://127.0.0.1:8000/api/videos/?room=${room}`)
+          .get(`http://${host}:8000/api/videos/?room=${room}`)
           .then((res) => {
             setVideos(res.data);
             const v = res.data.find((v) => v.id === msg.video_id);
-            if (v) setCurrentVideo(v);
+            if (v) {
+                isReady.current = false;
+                setCurrentVideo(v);
+            }
           });
       }
     }
@@ -160,18 +165,23 @@ export const useWatchParty = () => {
   useEffect(() => {
     if (!room) return;
 
-    // 1. Fetch Videos for THIS Room
+    // 1. Dynamic Setup
+    const host = window.location.hostname;
+    const API_URL = `http://${host}:8000`;
+    const WS_URL = `ws://${host}:8080`;
+
+    // 2. Fetch Initial Videos
     axios
-      .get(`http://localhost:8000/api/videos/?room=${room}`)
+      .get(`${API_URL}/api/videos/?room=${room}`)
       .then((res) => {
         setVideos(res.data);
         if (res.data.length > 0 && !currentVideo) setCurrentVideo(res.data[0]);
       })
       .catch((err) => console.error(err));
 
-    // 2. Connect WebSocket
+    // 3. Connect WebSocket
     ws.current = new WebSocket(
-      `ws://localhost:8080/ws?room=${room}&username=${username}`
+      `${WS_URL}/ws?room=${room}&username=${username}`
     );
 
     ws.current.onmessage = (event) => {
@@ -186,7 +196,7 @@ export const useWatchParty = () => {
       if (msg.type === "chat" || msg.type === "system")
         setMessages((prev) => [...prev, msg]);
 
-      // Handle Video Logic
+      // Handle Video Logic (Delegates to handleServerMessage)
       if (
         ["play", "pause", "seek", "sync_state", "change_video"].includes(
           msg.type
@@ -199,37 +209,11 @@ export const useWatchParty = () => {
       if (msg.type === "new_video") {
         console.log("🆕 New video added! Refreshing list...");
         axios
-          .get(`http://127.0.0.1:8000/api/videos/?room=${room}`)
+          .get(`${API_URL}/api/videos/?room=${room}`) // <--- Uses Dynamic API_URL
           .then((res) => setVideos(res.data));
       }
-
-      if (msg.type === "change_video") {
-        console.log("🎬 Switching to Video ID:", msg.video_id);
-        const nextVideo = videos.find((v) => v.id === msg.video_id);
-
-        if (nextVideo) {
-          // FIX 2: Reset readiness so we don't sync too early
-          isReady.current = false;
-
-          setCurrentVideo(nextVideo);
-          setPlaying(false);
-          playerSeekTo(0);
-          remoteState.current = null;
-        } else {
-          // ... (fetch logic remains the same)
-          axios
-            .get(`http://127.0.0.1:8000/api/videos/?room=${room}`)
-            .then((res) => {
-              setVideos(res.data);
-              const v = res.data.find((v) => v.id === msg.video_id);
-              if (v) {
-                // FIX 2 (Duplicate here just in case)
-                isReady.current = false;
-                setCurrentVideo(v);
-              }
-            });
-        }
-      }
+      
+      // Removed duplicate "change_video" block here!
     };
 
     return () => {
@@ -267,7 +251,6 @@ export const useWatchParty = () => {
     onSeek,
     sendMessage,
     toggleHost,
-    // Export New Functions
     sendNotification,
     changeVideo,
   };

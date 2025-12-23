@@ -4,6 +4,14 @@ from rest_framework.response import Response
 from .models import Video
 from .serializers import VideoSerializer
 import yt_dlp
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    callback_url = "http://localhost:5173"
+    client_class = OAuth2Client
 
 # Existing List View (for fetching)
 class VideoList(generics.ListCreateAPIView):

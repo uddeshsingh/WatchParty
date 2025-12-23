@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -16,12 +17,27 @@ var upgrader = websocket.Upgrader{
 func main() {
 	http.HandleFunc("/ws", handleConnections)
 
+	printLocalIP()
+
 	fmt.Println("🚀 Modular Server (Sync Fixed) started on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
+}
+
+func printLocalIP() {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	fmt.Println("\n=============================================")
+	fmt.Printf("📲 Connect your Phone to: http://%s:5173\n", localAddr.IP)
+	fmt.Println("=============================================\n")
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
-	// 1. SETUP
+	// 1. PARSE PARAMS
 	roomID := r.URL.Query().Get("room")
 	username := r.URL.Query().Get("username")
 	if roomID == "" {
@@ -31,18 +47,23 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		username = "Anon"
 	}
 
+	// 2. UPGRADE CONNECTION (Only do this ONCE)
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Upgrade error:", err)
+		return
 	}
 
-	clientID := uuid.New().String()
+	// Generate a temporary ID (this might be discarded if we reclaim an old session)
+	tempID := uuid.New().String()
 
-	// 2. JOIN ROOM (Logic moved to room_manager.go)
-	isHost, realTime, isPlaying := JoinRoom(roomID, username, ws, clientID)
+	// 3. JOIN ROOM & GET FINAL ID
+	// 'finalID' will be the OLD ID if the user was reclaimed/deduplicated.
+	finalID, isHost, realTime, isPlaying := JoinRoom(roomID, username, ws, tempID)
 
-	// 3. SEND WELCOME PACKETS
-	ws.WriteJSON(Message{Type: "identity", UserID: clientID, IsHost: isHost})
+	// 4. SEND WELCOME PACKETS
+	// Crucial: Send 'finalID' to frontend so it knows its real Identity
+	ws.WriteJSON(Message{Type: "identity", UserID: finalID, IsHost: isHost})
 
 	status := "paused"
 	if isPlaying {
@@ -52,13 +73,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	BroadcastUserList(roomID)
 
-	// 4. CLEANUP ON EXIT
+	// 5. CLEANUP ON EXIT
 	defer func() {
 		ws.Close()
-		HandleDisconnect(roomID, clientID)
+		// Use finalID so we remove the correct user from the map
+		HandleDisconnect(roomID, finalID)
 	}()
 
-	// 5. MESSAGE LOOP
+	// 6. MESSAGE LOOP
 	for {
 		var msg Message
 		err := ws.ReadJSON(&msg)
@@ -67,13 +89,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		msg.Room = roomID
-		msg.UserID = clientID
+		msg.UserID = finalID // Use finalID for all commands to match the map key
 
 		// Route Commands
 		switch msg.Type {
 		case "play", "pause", "seek":
-			// Update state internally, return true if we should broadcast
-			if HandleVideoCommand(roomID, clientID, msg) {
+			// Only the host (checked inside HandleVideoCommand) can control video
+			if HandleVideoCommand(roomID, finalID, msg) {
 				Broadcast(roomID, msg)
 			}
 
@@ -81,14 +103,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			Broadcast(roomID, msg)
 
 		case "grant_control", "revoke_control":
-			HandleAdminCommand(roomID, clientID, msg)
+			HandleAdminCommand(roomID, finalID, msg)
 			BroadcastUserList(roomID)
 
 		case "chat":
 			Broadcast(roomID, msg)
 
 		case "change_video":
-			if HandleChangeVideo(roomID, clientID, msg) {
+			if HandleChangeVideo(roomID, finalID, msg) {
 				Broadcast(roomID, msg)
 			}
 

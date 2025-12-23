@@ -20,10 +20,16 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from videos.views import VideoList
+from django.contrib import admin
+from django.urls import path, include
+from videos.views import GoogleLogin 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path('admin/', admin.site.urls),
     path('api/', include('videos.urls')),
+    path('api/auth/', include('dj_rest_auth.urls')),   
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')), 
+    path('api/auth/google/', GoogleLogin.as_view(), name='google_login'),   
 ]
 
 if settings.DEBUG:
