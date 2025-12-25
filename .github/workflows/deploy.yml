@@ -87,7 +87,7 @@ jobs:
           echo '${{ secrets.GCP_SA_KEY }}' > key.json
           
           # Navigate to frontend folder (CHANGE THIS IF YOUR FOLDER IS NOT 'wpfe')
-          cd wpfe
+          cd frontend/wpfe
           
           npm install
           npm run build
