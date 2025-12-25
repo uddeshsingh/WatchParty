@@ -1,50 +1,51 @@
-import React, { useState } from 'react'
-import axios from 'axios'
-import { FaPlus } from 'react-icons/fa'
+import React, { useState } from "react";
+import axios from "axios";
+import { FaPlus } from "react-icons/fa";
+// 1. IMPORT CONFIG
+import { API_URL } from "../components/Config";
 
 const AddVideoBar = ({ room, onVideoAdded }) => {
-    const [url, setUrl] = useState("")
-    const [loading, setLoading] = useState(false)
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    // 1. Get the Hostname
-    const domain = window.location.hostname;
-    // 2. Build the Base URL
-    const BASE_URL = `http://${domain}:8000`;
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!url.trim()) return;
 
-    const handleAdd = async (e) => {
-        e.preventDefault()
-        if (!url.trim()) return
+    setLoading(true);
+    try {
+      // 2. USE API_URL
+      await axios.post(`${API_URL}/api/videos/add/`, { url, room });
+      setUrl("");
 
-        setLoading(true)
-        try {
-            // FIX: Use BASE_URL here
-            await axios.post(`${BASE_URL}/api/videos/add/`, { url, room })
-            setUrl("")
-            
-            if (onVideoAdded) onVideoAdded()
-            
-        } catch (err) {
-            console.error("Failed to add video", err)
-            alert("Could not add video. Check console.")
-        } finally {
-            setLoading(false)
-        }
+      if (onVideoAdded) onVideoAdded();
+    } catch (err) {
+      console.error("Failed to add video", err);
+      alert("Could not add video. Check console.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <form onSubmit={handleAdd} className="add-video-form">
-            <input 
-                type="text" 
-                placeholder="Paste YouTube URL..." 
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="add-video-input"
-            />
-            <button type="submit" disabled={loading} className="add-video-btn" style={{opacity: loading ? 0.7 : 1}}>
-                {loading ? "..." : <FaPlus />}
-            </button>
-        </form>
-    )
-}
+  return (
+    <form onSubmit={handleAdd} className="add-video-form">
+      <input
+        type="text"
+        placeholder="Paste YouTube URL..."
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        className="add-video-input"
+      />
+      <button
+        type="submit"
+        disabled={loading}
+        className="add-video-btn"
+        style={{ opacity: loading ? 0.7 : 1 }}
+      >
+        {loading ? "..." : <FaPlus />}
+      </button>
+    </form>
+  );
+};
 
-export default AddVideoBar
+export default AddVideoBar;

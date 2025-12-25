@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+// 1. IMPORT CONFIG
+import { API_URL, WS_URL } from "../components/Config";
 
 export const useWatchParty = () => {
   const [room, setRoom] = useState(null);
@@ -21,21 +23,18 @@ export const useWatchParty = () => {
   const pendingSync = useRef(null);
   const remoteState = useRef(null);
 
-  // --- HELPER: Seek Player ---
   const playerSeekTo = (timestamp) => {
     if (playerRef.current && playerRef.current.seekTo) {
       playerRef.current.seekTo(timestamp, "seconds");
     }
   };
 
-  // --- HELPER: Send WebSocket Notification ---
   const sendNotification = (type) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type, username, room }));
     }
   };
 
-  // --- HELPER: Change Video (Host Only) ---
   const changeVideo = (videoId) => {
     if (ws.current && isHostRef.current) {
       ws.current.send(
@@ -48,9 +47,7 @@ export const useWatchParty = () => {
     }
   };
 
-  // --- WEBSOCKET MESSAGE HANDLER ---
   const handleServerMessage = (msg) => {
-    // 1. SYNC & SEEK
     if (msg.type === "seek" || msg.type === "sync_state") {
       remoteState.current = "seek";
       if (!isReady.current) {
@@ -64,7 +61,6 @@ export const useWatchParty = () => {
       }
     }
 
-    // 2. PLAY
     if (msg.type === "play") {
       remoteState.current = "play";
       const currentTime = playerRef.current
@@ -76,42 +72,37 @@ export const useWatchParty = () => {
       setPlaying(true);
     }
 
-    // 3. PAUSE
     if (msg.type === "pause") {
       remoteState.current = "pause";
       playerSeekTo(msg.timestamp);
       setPlaying(false);
     }
 
-    // 4. CHANGE VIDEO (Corrected & Dynamic)
     if (msg.type === "change_video") {
       console.log("🎬 Switching to Video ID:", msg.video_id);
       const nextVideo = videos.find((v) => v.id === msg.video_id);
 
       if (nextVideo) {
-        isReady.current = false; // Prevent premature syncing
+        isReady.current = false;
         setCurrentVideo(nextVideo);
-        setPlaying(false); 
-        playerSeekTo(0); 
+        setPlaying(false);
+        playerSeekTo(0);
         remoteState.current = null;
       } else {
-        // Fallback: Fetch latest list if video is missing
-        const host = window.location.hostname; // <--- Dynamic Host
-        axios
-          .get(`http://${host}:8000/api/videos/?room=${room}`)
-          .then((res) => {
-            setVideos(res.data);
-            const v = res.data.find((v) => v.id === msg.video_id);
-            if (v) {
-                isReady.current = false;
-                setCurrentVideo(v);
-            }
-          });
+        // Use Config API_URL
+        axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
+          setVideos(res.data);
+          const v = res.data.find((v) => v.id === msg.video_id);
+          if (v) {
+            isReady.current = false;
+            setCurrentVideo(v);
+          }
+        });
       }
     }
   };
 
-  // --- PLAYER EVENT HANDLERS ---
+  // ... (keep player event handlers: onPlay, onPause, onSeek, onReady, sendSignal - no changes needed) ...
   const onPlay = (timeFromPlayer) => {
     if (remoteState.current === "play") {
       remoteState.current = null;
@@ -161,16 +152,10 @@ export const useWatchParty = () => {
     );
   };
 
-  // --- CONNECTION & SETUP ---
   useEffect(() => {
     if (!room) return;
 
-    // 1. Dynamic Setup
-    const host = window.location.hostname;
-    const API_URL = `http://${host}:8000`;
-    const WS_URL = `ws://${host}:8080`;
-
-    // 2. Fetch Initial Videos
+    // 2. USE IMPORTED CONSTANTS
     axios
       .get(`${API_URL}/api/videos/?room=${room}`)
       .then((res) => {
@@ -179,7 +164,6 @@ export const useWatchParty = () => {
       })
       .catch((err) => console.error(err));
 
-    // 3. Connect WebSocket
     ws.current = new WebSocket(
       `${WS_URL}/ws?room=${room}&username=${username}`
     );
@@ -196,7 +180,6 @@ export const useWatchParty = () => {
       if (msg.type === "chat" || msg.type === "system")
         setMessages((prev) => [...prev, msg]);
 
-      // Handle Video Logic (Delegates to handleServerMessage)
       if (
         ["play", "pause", "seek", "sync_state", "change_video"].includes(
           msg.type
@@ -205,15 +188,12 @@ export const useWatchParty = () => {
         handleServerMessage(msg);
       }
 
-      // Handle New Video Added
       if (msg.type === "new_video") {
         console.log("🆕 New video added! Refreshing list...");
         axios
-          .get(`${API_URL}/api/videos/?room=${room}`) // <--- Uses Dynamic API_URL
+          .get(`${API_URL}/api/videos/?room=${room}`)
           .then((res) => setVideos(res.data));
       }
-      
-      // Removed duplicate "change_video" block here!
     };
 
     return () => {
