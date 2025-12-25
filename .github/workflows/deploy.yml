@@ -81,16 +81,16 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
-          GOOGLE_APPLICATION_CREDENTIALS: key.json
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ github.workspace }}/key.json"
         run: |
-          # Create key file from secret for Firebase to use
+          # Create key file in the root workspace
           echo '${{ secrets.GCP_SA_KEY }}' > key.json
           
-          # Navigate to frontend folder (CHANGE THIS IF YOUR FOLDER IS NOT 'wpfe')
+          # Go to frontend folder
           cd frontend/wpfe
           
           npm install
           npm run build
           
-          # Deploy to Firebase using the Service Account
+          # Deploy
           firebase deploy --only hosting --project ${{ secrets.GCP_PROJECT_ID }}
