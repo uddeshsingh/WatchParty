@@ -58,8 +58,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	tempID := uuid.New().String()
 
 	// 3. JOIN ROOM & GET FINAL ID
-	// 'finalID' will be the OLD ID if the user was reclaimed/deduplicated.
-	finalID, isHost, realTime, isPlaying := JoinRoom(roomID, username, ws, tempID)
+	// CHANGE: Accept the 5th return value (currentVideoID)
+	finalID, isHost, realTime, isPlaying, currentVideoID := JoinRoom(roomID, username, ws, tempID)
 
 	// 4. SEND WELCOME PACKETS
 	// Crucial: Send 'finalID' to frontend so it knows its real Identity
@@ -69,7 +69,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	if isPlaying {
 		status = "playing"
 	}
-	ws.WriteJSON(Message{Type: "sync_state", Timestamp: realTime, Content: status})
+	// CHANGE: Include 'VideoID' in the sync_state message
+	ws.WriteJSON(Message{
+		Type:      "sync_state",
+		Timestamp: realTime,
+		Content:   status,
+		VideoID:   currentVideoID,
+	})
 
 	BroadcastUserList(roomID)
 

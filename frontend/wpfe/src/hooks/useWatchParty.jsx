@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-// 1. IMPORT CONFIG
+// IMPORT CONFIG
 import { API_URL, WS_URL } from "../components/Config";
 
 export const useWatchParty = () => {
@@ -48,6 +48,33 @@ export const useWatchParty = () => {
   };
 
   const handleServerMessage = (msg) => {
+    // --- 1. NEW LOGIC: Sync Video ID on Join ---
+    if (msg.type === "sync_state") {
+        // If the server tells us a specific video is playing, and we aren't watching it...
+        if (msg.video_id && (!currentVideo || currentVideo.id !== msg.video_id)) {
+            console.log("🔄 Syncing to Host Video ID:", msg.video_id);
+            
+            // Try to find it in our current list
+            const syncedVideo = videos.find(v => v.id === msg.video_id);
+            
+            if (syncedVideo) {
+                isReady.current = false; // Reset ready state so we seek after load
+                setCurrentVideo(syncedVideo);
+            } else {
+                // If we don't have the list yet (race condition), fetch it
+                axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
+                    setVideos(res.data);
+                    const found = res.data.find(v => v.id === msg.video_id);
+                    if (found) {
+                        isReady.current = false;
+                        setCurrentVideo(found);
+                    }
+                });
+            }
+        }
+    }
+    // -------------------------------------------
+
     if (msg.type === "seek" || msg.type === "sync_state") {
       remoteState.current = "seek";
       if (!isReady.current) {
@@ -90,19 +117,20 @@ export const useWatchParty = () => {
         remoteState.current = null;
       } else {
         // Use Config API_URL
-        axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-          setVideos(res.data);
-          const v = res.data.find((v) => v.id === msg.video_id);
-          if (v) {
-            isReady.current = false;
-            setCurrentVideo(v);
-          }
-        });
+        axios
+          .get(`${API_URL}/api/videos/?room=${room}`)
+          .then((res) => {
+            setVideos(res.data);
+            const v = res.data.find((v) => v.id === msg.video_id);
+            if (v) {
+              isReady.current = false;
+              setCurrentVideo(v);
+            }
+          });
       }
     }
   };
 
-  // ... (keep player event handlers: onPlay, onPause, onSeek, onReady, sendSignal - no changes needed) ...
   const onPlay = (timeFromPlayer) => {
     if (remoteState.current === "play") {
       remoteState.current = null;
@@ -160,6 +188,7 @@ export const useWatchParty = () => {
       .get(`${API_URL}/api/videos/?room=${room}`)
       .then((res) => {
         setVideos(res.data);
+        // Only default to first video if we don't have one yet
         if (res.data.length > 0 && !currentVideo) setCurrentVideo(res.data[0]);
       })
       .catch((err) => console.error(err));

@@ -13,7 +13,8 @@ var rooms = make(map[string]*RoomState)
 var mutex = &sync.Mutex{}
 
 // --- 1. JOIN LOGIC ---
-func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string) (string, bool, float64, bool) {
+// CHANGE: Added 'int' to return signature (5th value)
+func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string) (string, bool, float64, bool, int) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -37,8 +38,8 @@ func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string) (str
 		realTime += elapsed
 	}
 
-	// 2. CRITICAL FIX: Return client.ID so main.go uses the correct one!
-	return client.ID, client.IsHost, realTime, room.Playing
+	// CHANGE: Return room.VideoID at the end
+	return client.ID, client.IsHost, realTime, room.Playing, room.VideoID
 }
 
 // AddClient handles Deduping: If "Alice" joins again, close her old tab and reuse her info

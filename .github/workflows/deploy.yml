@@ -1,0 +1,96 @@
+name: Deploy WatchParty
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # ------------------------------------
+  # JOB 1: DEPLOY DJANGO (Python)
+  # ------------------------------------
+  deploy-django:
+    runs-on: ubuntu-latest
+    # Only run if python files changed
+    if: always() 
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Backend (Python)
+        run: |
+          cd backend-python
+          gcloud run deploy watchparty-api \
+            --source . \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars DJANGO_ENV=production,SECRET_KEY="${{ secrets.DJANGO_SECRET_KEY }}",CORS_ALLOWED_ORIGINS="https://${{ secrets.GCP_PROJECT_ID }}.web.app",CSRF_TRUSTED_ORIGINS="https://${{ secrets.GCP_PROJECT_ID }}.web.app",FRONTEND_URL="https://${{ secrets.GCP_PROJECT_ID }}.web.app"
+
+  # ------------------------------------
+  # JOB 2: DEPLOY GO (WebSocket)
+  # ------------------------------------
+  deploy-go:
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Backend (Go)
+        run: |
+          cd backend-go
+          gcloud run deploy watchparty-ws \
+            --source . \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated
+
+  # ------------------------------------
+  # JOB 3: DEPLOY FRONTEND (React)
+  # ------------------------------------
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: [deploy-django, deploy-go] # Wait for backends to ensure URLs work
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Build & Deploy
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
+          GOOGLE_APPLICATION_CREDENTIALS: key.json
+        run: |
+          # Create key file from secret for Firebase to use
+          echo '${{ secrets.GCP_SA_KEY }}' > key.json
+          
+          # Navigate to frontend folder (CHANGE THIS IF YOUR FOLDER IS NOT 'wpfe')
+          cd wpfe
+          
+          npm install
+          npm run build
+          
+          # Deploy to Firebase using the Service Account
+          firebase deploy --only hosting --project ${{ secrets.GCP_PROJECT_ID }}
