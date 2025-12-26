@@ -1,13 +1,13 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
 import { FaFilm } from "react-icons/fa";
-// 1. IMPORT CONFIG
 import { API_URL } from "../components/Config";
 
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isSignup, setIsSignup] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -15,10 +15,12 @@ const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [error, setError] = useState(null);
 
+  const from = location.state?.from?.pathname || "/";
+
   const handleSuccess = (username) => {
     localStorage.setItem("watchparty_user", username);
     onLogin(username);
-    navigate("/");
+    navigate(from, { replace: true });
   };
 
   const handleSubmit = async (e) => {

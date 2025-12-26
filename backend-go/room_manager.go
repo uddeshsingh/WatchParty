@@ -12,13 +12,25 @@ import (
 var rooms = make(map[string]*RoomState)
 var mutex = &sync.Mutex{}
 
-// --- 1. JOIN LOGIC ---
-// CHANGE: Added 'int' to return signature (5th value)
-func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string) (string, bool, float64, bool, int) {
+// CHANGED: Added 'action' parameter and 'error' return type
+func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string, action string) (string, bool, float64, bool, int, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	if rooms[roomID] == nil {
+	exists := rooms[roomID] != nil
+
+	// RULE 1: If joining via Link (action="join"), Room MUST exist
+	if action == "join" && !exists {
+		return "", false, 0, false, 0, fmt.Errorf("room_not_found")
+	}
+
+	// RULE 2: If Creating (action="create"), Room MUST NOT exist
+	if action == "create" && exists {
+		return "", false, 0, false, 0, fmt.Errorf("room_exists")
+	}
+
+	// If room doesn't exist (and action is 'create'), make it
+	if !exists {
 		rooms[roomID] = &RoomState{
 			VideoID: 0, Timestamp: 0, Playing: false, LastUpdated: time.Now(),
 			Clients: make(map[string]*Client),
@@ -27,53 +39,38 @@ func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string) (str
 	room := rooms[roomID]
 
 	client := &Client{ID: clientID, Conn: ws, Username: username}
-
-	// This updates client.ID if a previous session is found
 	room.AddClient(client)
 
-	// Sync Calculation
 	realTime := room.Timestamp
 	if room.Playing {
 		elapsed := time.Since(room.LastUpdated).Seconds()
 		realTime += elapsed
 	}
 
-	// CHANGE: Return room.VideoID at the end
-	return client.ID, client.IsHost, realTime, room.Playing, room.VideoID
+	return client.ID, client.IsHost, realTime, room.Playing, room.VideoID, nil
 }
 
-// AddClient handles Deduping: If "Alice" joins again, close her old tab and reuse her info
 func (r *RoomState) AddClient(client *Client) {
-	// Note: We do NOT lock here because JoinRoom already holds the global 'mutex'
-
-	// 1. Check for existing user with same name
 	for id, existingClient := range r.Clients {
 		if existingClient.Username == client.Username {
 			fmt.Printf("♻️  Reclaiming session for %s\n", client.Username)
 
-			// Inherit status and ID
 			client.IsHost = existingClient.IsHost
-			client.ID = existingClient.ID // IMPORTANT: Frontend keeps the old ID
+			client.ID = existingClient.ID
 
-			// Close the old connection (kicks the other tab)
 			existingClient.Conn.Close()
 			delete(r.Clients, id)
 			break
 		}
 	}
 
-	// 2. If nobody was found (or after cleaning up old one), check if they should be host
 	if len(r.Clients) == 0 {
 		client.IsHost = true
 	}
 
-	// 3. Register the client
 	r.Clients[client.ID] = client
 }
 
-// --- 2. COMMAND LOGIC ---
-
-// HandleVideoCommand updates the room state safely
 func HandleVideoCommand(roomID, clientID string, msg Message) bool {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -104,7 +101,6 @@ func HandleVideoCommand(roomID, clientID string, msg Message) bool {
 	return true
 }
 
-// HandleAdminCommand grants/revokes host
 func HandleAdminCommand(roomID, clientID string, msg Message) {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -125,8 +121,6 @@ func HandleAdminCommand(roomID, clientID string, msg Message) {
 		target.Conn.WriteJSON(Message{Type: "identity", UserID: target.ID, IsHost: target.IsHost})
 	}
 }
-
-// --- 3. DISCONNECT LOGIC ---
 
 func HandleDisconnect(roomID, clientID string) {
 	mutex.Lock()
@@ -208,6 +202,22 @@ func HandleChangeVideo(roomID, clientID string, msg Message) bool {
 	room.LastUpdated = time.Now()
 
 	return true
+}
+
+func GetActiveRooms() []RoomSummary {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	var summaries []RoomSummary
+	for name, state := range rooms {
+		if len(state.Clients) > 0 {
+			summaries = append(summaries, RoomSummary{
+				Name:  name,
+				Count: len(state.Clients),
+			})
+		}
+	}
+	return summaries
 }
 
 // --- 4. BROADCAST HELPERS ---

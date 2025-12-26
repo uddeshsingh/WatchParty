@@ -40,3 +40,8 @@ type UserSummary struct {
 	Username string `json:"username"`
 	IsHost   bool   `json:"is_host"`
 }
+
+type RoomSummary struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}

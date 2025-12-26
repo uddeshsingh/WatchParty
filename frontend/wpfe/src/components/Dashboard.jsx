@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
-import { FaFilm, FaCrown } from "react-icons/fa";
+import React, { useEffect, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { FaFilm, FaCrown, FaArrowLeft, FaShareAlt } from "react-icons/fa"; // Added FaShareAlt
 import { useWatchParty } from "../hooks/useWatchParty";
 import VideoPlayer from "./VideoPlayer";
 import ChatSidebar from "./ChatSidebar";
@@ -10,9 +11,16 @@ import AddVideoBar from "./AddVideoBar";
 import ReactionOverlay from "./ReactionOverlay";
 
 const Dashboard = ({ user, onLogout }) => {
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const hasAlerted = useRef(false);
+
+  // CHANGED: Get action from state (default to 'join')
+  const action = location.state?.action || "join";
+
   const {
     room,
-    setRoom,
     username,
     setUsername,
     isHost,
@@ -24,6 +32,7 @@ const Dashboard = ({ user, onLogout }) => {
     playing,
     playerRef,
     lastReaction,
+    error,
     sendReaction,
     onReady,
     onPlay,
@@ -35,7 +44,23 @@ const Dashboard = ({ user, onLogout }) => {
     changeVideo,
     sendTypingSignal,
     typingUsers,
-  } = useWatchParty();
+  } = useWatchParty(roomId, action);
+
+  useEffect(() => {
+    if (error && !hasAlerted.current) {
+      hasAlerted.current = true;
+      alert(
+        error === "room_exists" ? "Room name taken!" : "Room does not exist!"
+      );
+      navigate("/");
+    }
+  }, [error, navigate]);
+
+  const copyLink = () => {
+    const url = window.location.href.split("?")[0];
+    navigator.clipboard.writeText(url);
+    alert("Link copied to clipboard! 📋");
+  };
 
   useEffect(() => {
     if (user) setUsername(user);
@@ -43,13 +68,35 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div className="app-container">
-      {!room && <RoomSelector onJoin={setRoom} />}
+      {/* CHANGED: Pass navigate with state for Creation */}
+      {!room && (
+        <RoomSelector
+          onJoin={(name, mode) =>
+            navigate(`/room/${name}`, { state: { action: mode } })
+          }
+        />
+      )}
 
       <nav className="navbar">
         <div className="logo">
           <FaFilm /> <span>WatchParty</span>
         </div>
         <div className="nav-info">
+          {room && (
+            <>
+              {/* CHANGED: Added Share Button */}
+              <button className="nav-btn" onClick={copyLink} title="Share Room">
+                <FaShareAlt /> Share
+              </button>
+              <button
+                className="nav-btn"
+                onClick={() => navigate("/")}
+                title="Leave Room"
+              >
+                <FaArrowLeft /> Leave
+              </button>
+            </>
+          )}
           {isHost && (
             <span className="badge host-badge">
               <FaCrown /> Host

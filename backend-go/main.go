@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -16,6 +18,7 @@ var upgrader = websocket.Upgrader{
 
 func main() {
 	http.HandleFunc("/ws", handleConnections)
+	http.HandleFunc("/rooms", handleGetRooms)
 
 	printLocalIP()
 
@@ -33,13 +36,20 @@ func printLocalIP() {
 
 	fmt.Println("\n=============================================")
 	fmt.Printf("📲 Connect your Phone to: http://%s:5173\n", localAddr.IP)
-	fmt.Println("=============================================\n")
+	fmt.Println("=============================================")
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	// 1. PARSE PARAMS
 	roomID := r.URL.Query().Get("room")
 	username := r.URL.Query().Get("username")
+
+	// CHANGED: Get 'action' (defaults to 'join')
+	action := r.URL.Query().Get("action")
+	if action == "" {
+		action = "join"
+	}
+
 	if roomID == "" {
 		roomID = "general"
 	}
@@ -47,29 +57,33 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		username = "Anon"
 	}
 
-	// 2. UPGRADE CONNECTION (Only do this ONCE)
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
 	}
 
-	// Generate a temporary ID (this might be discarded if we reclaim an old session)
 	tempID := uuid.New().String()
 
-	// 3. JOIN ROOM & GET FINAL ID
-	// CHANGE: Accept the 5th return value (currentVideoID)
-	finalID, isHost, realTime, isPlaying, currentVideoID := JoinRoom(roomID, username, ws, tempID)
+	// CHANGED: Pass 'action' and handle error
+	finalID, isHost, realTime, isPlaying, currentVideoID, joinErr := JoinRoom(roomID, username, ws, tempID, action)
+	// CHANGED: Handle Join Errors (Room exists / Not found)
+	if joinErr != nil {
+		ws.WriteJSON(Message{
+			Type:    "error",
+			Content: joinErr.Error(),
+		})
+		time.Sleep(500 * time.Millisecond)
+		ws.Close()
+		return
+	}
 
-	// 4. SEND WELCOME PACKETS
-	// Crucial: Send 'finalID' to frontend so it knows its real Identity
 	ws.WriteJSON(Message{Type: "identity", UserID: finalID, IsHost: isHost})
 
 	status := "paused"
 	if isPlaying {
 		status = "playing"
 	}
-	// CHANGE: Include 'VideoID' in the sync_state message
 	ws.WriteJSON(Message{
 		Type:      "sync_state",
 		Timestamp: realTime,
@@ -79,14 +93,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	BroadcastUserList(roomID)
 
-	// 5. CLEANUP ON EXIT
 	defer func() {
 		ws.Close()
-		// Use finalID so we remove the correct user from the map
 		HandleDisconnect(roomID, finalID)
 	}()
 
-	// 6. MESSAGE LOOP
 	for {
 		var msg Message
 		err := ws.ReadJSON(&msg)
@@ -95,12 +106,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 
 		msg.Room = roomID
-		msg.UserID = finalID // Use finalID for all commands to match the map key
+		msg.UserID = finalID
 
-		// Route Commands
 		switch msg.Type {
 		case "play", "pause", "seek":
-			// Only the host (checked inside HandleVideoCommand) can control video
 			if HandleVideoCommand(roomID, finalID, msg) {
 				Broadcast(roomID, msg)
 			}
@@ -128,8 +137,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "reaction":
 			Broadcast(roomID, msg)
-
 		}
-
 	}
+}
+
+func handleGetRooms(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+
+	rooms := GetActiveRooms()
+
+	if rooms == nil {
+		rooms = []RoomSummary{}
+	}
+
+	json.NewEncoder(w).Encode(rooms)
 }

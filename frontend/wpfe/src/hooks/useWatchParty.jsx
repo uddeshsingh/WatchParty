@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-// IMPORT CONFIG
 import { API_URL, WS_URL } from "../components/Config";
 
-export const useWatchParty = () => {
-  const [room, setRoom] = useState(null);
+// CHANGED: Accept 'action' (join/create)
+export const useWatchParty = (urlRoom = null, action = "join") => {
+  const [room, setRoom] = useState(urlRoom);
+  const [error, setError] = useState(null); // CHANGED: Error state
   const [username, setUsername] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [userList, setUserList] = useState([]);
   const [messages, setMessages] = useState([]);
   const [myID, setMyID] = useState(null);
   const [lastReaction, setLastReaction] = useState(null);
+  const intentionalClose = useRef(false);
 
   const [videos, setVideos] = useState([]);
   const [currentVideo, setCurrentVideo] = useState(null);
@@ -80,20 +82,15 @@ export const useWatchParty = () => {
   };
 
   const handleServerMessage = (msg) => {
-    // --- 1. NEW LOGIC: Sync Video ID on Join ---
     if (msg.type === "sync_state") {
-      // If the server tells us a specific video is playing, and we aren't watching it...
       if (msg.video_id && (!currentVideo || currentVideo.id !== msg.video_id)) {
         console.log("🔄 Syncing to Host Video ID:", msg.video_id);
-
-        // Try to find it in our current list
         const syncedVideo = videos.find((v) => v.id === msg.video_id);
 
         if (syncedVideo) {
-          isReady.current = false; // Reset ready state so we seek after load
+          isReady.current = false;
           setCurrentVideo(syncedVideo);
         } else {
-          // If we don't have the list yet (race condition), fetch it
           axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
             setVideos(res.data);
             const found = res.data.find((v) => v.id === msg.video_id);
@@ -147,7 +144,6 @@ export const useWatchParty = () => {
         playerSeekTo(0);
         remoteState.current = null;
       } else {
-        // Use Config API_URL
         axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
           setVideos(res.data);
           const v = res.data.find((v) => v.id === msg.video_id);
@@ -231,21 +227,24 @@ export const useWatchParty = () => {
   };
 
   useEffect(() => {
-    if (!room) return;
+    setRoom(urlRoom);
+  }, [urlRoom]);
 
-    // 2. USE IMPORTED CONSTANTS
+  useEffect(() => {
+    if (!room || !username) return;
+    intentionalClose.current = false;
+    setError(null);
+
     axios
       .get(`${API_URL}/api/videos/?room=${room}`)
       .then((res) => {
         setVideos(res.data);
-        // Only default to first video if we don't have one yet
         if (res.data.length > 0 && !currentVideo) setCurrentVideo(res.data[0]);
       })
       .catch((err) => console.error(err));
 
-    ws.current = new WebSocket(
-      `${WS_URL}/ws?room=${room}&username=${username}`
-    );
+    const wsUrl = `${WS_URL}?room=${room}&username=${username}&action=${action}`;
+    ws.current = new WebSocket(wsUrl);
 
     ws.current.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -256,6 +255,14 @@ export const useWatchParty = () => {
         isHostRef.current = msg.is_host;
       }
       if (msg.type === "user_list") setUserList(msg.user_list);
+
+      if (msg.type === "error") {
+        setError(msg.content);
+        intentionalClose.current = true;
+        ws.current.close();
+        return;
+      }
+
       if (msg.type === "chat" || msg.type === "system")
         setMessages((prev) => [...prev, msg]);
 
@@ -281,10 +288,22 @@ export const useWatchParty = () => {
       }
     };
 
+    ws.current.onclose = () => {
+        console.log("🔌 WebSocket Disconnected");
+        if (!intentionalClose.current) {
+            if (action === "join") {
+                setError("room_not_found_silent"); 
+            } else {
+                setError("connection_lost");
+            }
+        }
+    };
+
     return () => {
+      intentionalClose.current = true;
       if (ws.current) ws.current.close();
     };
-  }, [room, username]);
+  }, [room, username, action]);
 
   const sendMessage = (text) =>
     ws.current.send(JSON.stringify({ type: "chat", username, content: text }));
@@ -309,6 +328,7 @@ export const useWatchParty = () => {
     playing,
     playerRef,
     lastReaction,
+    error,
     setCurrentVideo,
     sendReaction,
     setUsername,
