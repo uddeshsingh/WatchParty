@@ -10,6 +10,7 @@ export const useWatchParty = () => {
   const [userList, setUserList] = useState([]);
   const [messages, setMessages] = useState([]);
   const [myID, setMyID] = useState(null);
+  const [lastReaction, setLastReaction] = useState(null);
 
   const [videos, setVideos] = useState([]);
   const [currentVideo, setCurrentVideo] = useState(null);
@@ -32,6 +33,18 @@ export const useWatchParty = () => {
     }
   };
 
+  const sendReaction = (emoji) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(
+        JSON.stringify({
+          type: "reaction",
+          username,
+          content: emoji,
+        })
+      );
+    }
+  };
+
   const sendNotification = (type) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type, username, room }));
@@ -51,15 +64,12 @@ export const useWatchParty = () => {
   };
 
   const sendTypingSignal = () => {
-    console.log("1. sendTypingSignal function TRIGGERED!");
-    const now  = Date.now();
-    if (now - lastTypingTime.current < 3000){
-      console.log("2. BLOCKED by Throttle (Wait 3s)");
+    const now = Date.now();
+    if (now - lastTypingTime.current < 3000) {
       return;
-    } 
+    }
     lastTypingTime.current = now;
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      console.log("3. SENDING WebSocket Message now...");
       ws.current.send(
         JSON.stringify({
           type: "typing",
@@ -67,38 +77,34 @@ export const useWatchParty = () => {
         })
       );
     }
-    else {
-      console.log("4. WebSocket NOT OPEN - Cannot send typing signal");
-    }
-  }
+  };
 
   const handleServerMessage = (msg) => {
     // --- 1. NEW LOGIC: Sync Video ID on Join ---
     if (msg.type === "sync_state") {
-        // If the server tells us a specific video is playing, and we aren't watching it...
-        if (msg.video_id && (!currentVideo || currentVideo.id !== msg.video_id)) {
-            console.log("🔄 Syncing to Host Video ID:", msg.video_id);
-            
-            // Try to find it in our current list
-            const syncedVideo = videos.find(v => v.id === msg.video_id);
-            
-            if (syncedVideo) {
-                isReady.current = false; // Reset ready state so we seek after load
-                setCurrentVideo(syncedVideo);
-            } else {
-                // If we don't have the list yet (race condition), fetch it
-                axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-                    setVideos(res.data);
-                    const found = res.data.find(v => v.id === msg.video_id);
-                    if (found) {
-                        isReady.current = false;
-                        setCurrentVideo(found);
-                    }
-                });
+      // If the server tells us a specific video is playing, and we aren't watching it...
+      if (msg.video_id && (!currentVideo || currentVideo.id !== msg.video_id)) {
+        console.log("🔄 Syncing to Host Video ID:", msg.video_id);
+
+        // Try to find it in our current list
+        const syncedVideo = videos.find((v) => v.id === msg.video_id);
+
+        if (syncedVideo) {
+          isReady.current = false; // Reset ready state so we seek after load
+          setCurrentVideo(syncedVideo);
+        } else {
+          // If we don't have the list yet (race condition), fetch it
+          axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
+            setVideos(res.data);
+            const found = res.data.find((v) => v.id === msg.video_id);
+            if (found) {
+              isReady.current = false;
+              setCurrentVideo(found);
             }
+          });
         }
+      }
     }
-    // -------------------------------------------
 
     if (msg.type === "seek" || msg.type === "sync_state") {
       remoteState.current = "seek";
@@ -142,16 +148,14 @@ export const useWatchParty = () => {
         remoteState.current = null;
       } else {
         // Use Config API_URL
-        axios
-          .get(`${API_URL}/api/videos/?room=${room}`)
-          .then((res) => {
-            setVideos(res.data);
-            const v = res.data.find((v) => v.id === msg.video_id);
-            if (v) {
-              isReady.current = false;
-              setCurrentVideo(v);
-            }
-          });
+        axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
+          setVideos(res.data);
+          const v = res.data.find((v) => v.id === msg.video_id);
+          if (v) {
+            isReady.current = false;
+            setCurrentVideo(v);
+          }
+        });
       }
     }
     if (msg.type === "typing") {
@@ -164,10 +168,16 @@ export const useWatchParty = () => {
         return [...prev, msg.username];
       });
       typingTimeout.current[msg.username] = setTimeout(() => {
-        setTypingUsers((prev) =>
-          prev.filter((user) => user !== msg.username)
-        );
+        setTypingUsers((prev) => prev.filter((user) => user !== msg.username));
       }, 4000);
+    }
+
+    if (msg.type === "reaction") {
+      setLastReaction({
+        emoji: msg.content,
+        id: Date.now(),
+        username: msg.username,
+      });
     }
   };
 
@@ -250,9 +260,15 @@ export const useWatchParty = () => {
         setMessages((prev) => [...prev, msg]);
 
       if (
-        ["play", "pause", "seek", "sync_state", "change_video", "typing"].includes(
-          msg.type
-        )
+        [
+          "play",
+          "pause",
+          "seek",
+          "sync_state",
+          "change_video",
+          "typing",
+          "reaction",
+        ].includes(msg.type)
       ) {
         handleServerMessage(msg);
       }
@@ -282,18 +298,20 @@ export const useWatchParty = () => {
 
   return {
     room,
-    setRoom,
+    typingUsers,
     username,
-    setUsername,
     isHost,
     userList,
     myID,
     messages,
     videos,
     currentVideo,
-    setCurrentVideo,
     playing,
     playerRef,
+    lastReaction,
+    setCurrentVideo,
+    sendReaction,
+    setUsername,
     onReady,
     onPlay,
     onPause,
@@ -303,6 +321,6 @@ export const useWatchParty = () => {
     sendNotification,
     changeVideo,
     sendTypingSignal,
-    typingUsers,
+    setRoom,
   };
 };

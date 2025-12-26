@@ -125,6 +125,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "typing":
 			Broadcast(roomID, msg)
+
+		case "reaction":
+			Broadcast(roomID, msg)
+
 		}
+
 	}
 }

@@ -3,19 +3,19 @@
 /* --- THEME VARIABLES --- */
 :root {
   /* Colors */
-  --bg-dark: #0f0f0f;       /* Main background */
-  --bg-panel: #18181b;      /* Sidebar/Navbar */
-  --bg-card: #1a1a1a;       /* Modals/Cards */
-  --bg-input: #2a2a2a;      /* Inputs */
-  --bg-hover: #27272a;      /* Hover states */
+  --bg-dark: #0f0f0f; /* Main background */
+  --bg-panel: #18181b; /* Sidebar/Navbar */
+  --bg-card: #1a1a1a; /* Modals/Cards */
+  --bg-input: #2a2a2a; /* Inputs */
+  --bg-hover: #27272a; /* Hover states */
   --bg-overlay: rgba(0, 0, 0, 0.85); /* Modal backdrops */
 
-  --primary: #8b5cf6;       /* Main Accent (Purple) */
+  --primary: #8b5cf6; /* Main Accent (Purple) */
   --primary-hover: #7c3aed;
-  
-  --success: #22c55e;       /* Green */
-  --danger: #ef4444;        /* Red */
-  --warning: #eab308;       /* Yellow/Gold */
+
+  --success: #22c55e; /* Green */
+  --danger: #ef4444; /* Red */
+  --warning: #eab308; /* Yellow/Gold */
 
   --text-main: #ffffff;
   --text-secondary: #a1a1aa;
@@ -79,9 +79,17 @@
   gap: 6px;
 }
 
-.host-badge { color: var(--warning); border-color: var(--warning); }
-.user-badge { cursor: pointer; transition: background 0.2s; }
-.user-badge:hover { background: var(--bg-input); }
+.host-badge {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+.user-badge {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.user-badge:hover {
+  background: var(--bg-input);
+}
 
 /* --- MAIN LAYOUT --- */
 .main-content {
@@ -104,8 +112,7 @@
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  /* Ensure sidebar doesn't get crushed if window is small (non-mobile) */
-  min-width: 300px; 
+  min-width: 300px;
 }
 
 .sidebar-header {
@@ -145,13 +152,20 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   width: 350px;
-  max-width: 90%; /* Responsive fix for small screens */
-  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  max-width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 
-.login-card h2 { margin-top: 0; text-align: center; }
+.login-card h2 {
+  margin-top: 0;
+  text-align: center;
+}
 
-.login-form { display: flex; flex-direction: column; gap: 15px; }
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
 
 .input-field {
   padding: 12px;
@@ -162,7 +176,10 @@
   outline: none;
   transition: 0.2s;
 }
-.input-field:focus { border-color: var(--primary); background: var(--bg-hover); }
+.input-field:focus {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+}
 
 .btn-primary {
   padding: 12px;
@@ -175,8 +192,13 @@
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 
 .error-banner {
   background: rgba(239, 68, 68, 0.2);
@@ -188,15 +210,33 @@
   text-align: center;
 }
 
-.divider { margin: 20px 0; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
-.toggle-link { margin-top: 25px; text-align: center; color: var(--text-secondary); cursor: pointer; }
-.toggle-link:hover { color: var(--text-main); }
+.divider {
+  margin: 20px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.toggle-link {
+  margin-top: 25px;
+  text-align: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.toggle-link:hover {
+  color: var(--text-main);
+}
 
 /* --- MODALS (RoomSelector) --- */
 .modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: var(--bg-overlay);
-  display: flex; justify-content: center; align-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   z-index: 2000;
 }
 .modal-content {
@@ -207,8 +247,13 @@
   width: 320px;
   text-align: center;
 }
-.modal-title { margin-top: 0; }
-.modal-desc { color: var(--text-secondary); margin-bottom: 20px; }
+.modal-title {
+  margin-top: 0;
+}
+.modal-desc {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
 
 /* --- USER LIST --- */
 .user-list-section {
@@ -217,10 +262,26 @@
   max-height: 150px;
   overflow-y: auto;
 }
-.user-item { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
-.user-name { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-.user-name.is-host { color: var(--warning); font-weight: bold; }
-.user-me { opacity: 0.6; font-size: 0.85em; }
+.user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 6px 0;
+}
+.user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.user-name.is-host {
+  color: var(--warning);
+  font-weight: bold;
+}
+.user-me {
+  opacity: 0.6;
+  font-size: 0.85em;
+}
 .control-btn {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -228,93 +289,293 @@
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
-  display: flex; align-items: center;
+  display: flex;
+  align-items: center;
 }
-.control-btn.promote { color: var(--success); }
-.control-btn.revoke { color: var(--danger); }
+.control-btn.promote {
+  color: var(--success);
+}
+.control-btn.revoke {
+  color: var(--danger);
+}
 
 /* --- ADD VIDEO BAR --- */
-.add-video-form { display: flex; gap: 10px; padding: 10px; border-bottom: 1px solid var(--border-color); }
+.add-video-form {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
 .add-video-input {
-  flex: 1; padding: 8px; border-radius: var(--radius-sm);
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: var(--bg-input); color: var(--text-main);
+  background: var(--bg-input);
+  color: var(--text-main);
 }
 .add-video-btn {
   background: var(--success);
-  border: none; color: white;
-  padding: 0 15px; border-radius: var(--radius-sm);
+  border: none;
+  color: white;
+  padding: 0 15px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 /* --- PLAYLIST --- */
-.playlist-section { height: 40%; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; }
-.playlist-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+.playlist-section {
+  height: 40%;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+.playlist-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
 .playlist-item {
-  padding: 10px; border-radius: var(--radius-sm);
-  cursor: pointer; transition: background 0.2s;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s;
   color: var(--text-secondary);
 }
-.playlist-item:hover { background: var(--bg-hover); color: var(--text-main); }
+.playlist-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
 
 /* --- CHAT --- */
-.chat-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.chat-messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-.chat-msg-system { color: var(--text-muted); font-size: 0.85em; font-style: italic; }
-.chat-msg-user strong { color: var(--primary); }
-.chat-msg-user span { color: var(--text-secondary); }
+.chat-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-msg-system {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  font-style: italic;
+}
+.chat-msg-user strong {
+  color: var(--primary);
+}
+.chat-msg-user span {
+  color: var(--text-secondary);
+}
 
-/* [FIX 1/2] Make relative so we can float the typing text */
-.chat-input-area { 
-  padding: 10px; 
-  display: flex; 
-  gap: 8px; 
+/* Chat Input & Emoji Picker Positioning */
+.chat-input-area {
+  padding: 10px;
+  display: flex;
+  gap: 8px;
   background: var(--bg-panel);
-  position: relative; 
+  position: relative; /* Crucial for picker alignment */
+  align-items: center;
 }
 
 .chat-input {
-  flex: 1; padding: 10px; border-radius: var(--radius-sm);
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: var(--bg-input); color: white;
+  background: var(--bg-input);
+  color: white;
 }
 .chat-send-btn {
-  background: var(--primary); border: none; color: white;
-  padding: 0 15px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--primary); 
+  border: none; 
+  color: white;
+  padding: 10px 15px;  
+  border-radius: var(--radius-sm); 
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The Emoji Popover Box */
+.emoji-picker {
+  position: absolute;
+  bottom: 60px; /* Floats above the input bar */
+  right: 10px; /* Aligned to the right */
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 8px;
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: 5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+/* Emoji Buttons */
+.emoji-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+  padding: 5px;
+  border-radius: 4px;
+}
+.emoji-btn:hover {
+  transform: scale(1.2);
+  background: var(--bg-hover);
+}
+
+/* The Smiley Toggle Icon */
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+.icon-btn:hover {
+  color: var(--primary);
 }
 
 /* --- VIDEO PLAYER & CONTROLS --- */
-.player-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; width: 100%; height: 100%; }
-.player-wrapper { position: relative; width: 100%; height: 100%; }
-.blocker-overlay { position: absolute; inset: 0; bottom: 50px; z-index: 10; cursor: not-allowed; }
+.player-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  width: 100%;
+  height: 100%;
+}
+.player-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.blocker-overlay {
+  position: absolute;
+  inset: 0;
+  bottom: 50px;
+  z-index: 10;
+  cursor: not-allowed;
+}
 
 .custom-controls {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.8); padding: 10px 15px;
-  display: flex; gap: 15px; align-items: center; z-index: 20;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 10px 15px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  z-index: 20;
 }
-.controls-text { flex: 1; color: var(--text-secondary); font-size: 0.9rem; font-style: italic; }
-.controls-icon-btn { background: none; border: none; color: white; cursor: pointer; display: flex; align-items: center; font-size: 1.1rem; }
-.volume-slider { width: 60px; cursor: pointer; }
+.controls-text {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+.controls-icon-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+}
+.volume-slider {
+  width: 60px;
+  cursor: pointer;
+}
 
 /* Scrollbars */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-dark); }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #444; }
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
 
-/* [FIX 2/2] Absolute positioning for Typing Indicator */
+/* Typing Indicator (Floating above input) */
 .typing-indicator {
   position: absolute;
-  top: -25px;       /* Move it UP outside the box */
-  left: 15px;       /* Align with the text input */
+  top: -25px;
+  left: 15px;
   font-size: 0.8rem;
-  color: #aaa;      /* Grey color, or use var(--primary) for purple */
+  color: #aaa;
   font-style: italic;
-  pointer-events: none; /* Ensures clicks pass through it */
+  pointer-events: none;
   white-space: nowrap;
 }
 
+/* --- REACTION OVERLAY ANIMATION --- */
+.reaction-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let clicks pass through to the video */
+  overflow: hidden;
+  z-index: 50; /* Above video, below controls */
+}
+
+.floating-emoji {
+  position: absolute;
+  bottom: 20px;
+  font-size: 2.5rem;
+  animation: floatUp 2s ease-out forwards;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reaction-username {
+  font-size: 0.8rem;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  opacity: 0.8;
+  margin-top: -5px;
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    transform: translateY(-20px) scale(1.2); /* Pop effect */
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-300px) scale(1);
+    opacity: 0;
+  }
+}
 
 /* --- MOBILE RESPONSIVENESS --- */
 @media (max-width: 768px) {
@@ -358,7 +619,7 @@
     padding: 4px 8px;
     font-size: 0.8rem;
   }
-  
+
   /* 6. Hide volume slider on mobile to save space */
   .volume-slider {
     display: none;
