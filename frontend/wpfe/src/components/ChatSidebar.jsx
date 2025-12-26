@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { FaPaperPlane } from 'react-icons/fa'
 
-const ChatSidebar = ({ messages, onSendMessage }) => {
+const ChatSidebar = ({ messages, onSendMessage, onTyping, typingUsers }) => {
   const [input, setInput] = useState("")
 
   const handleSend = () => {
@@ -30,9 +30,18 @@ const ChatSidebar = ({ messages, onSendMessage }) => {
         </div>
 
         <div className="chat-input-area">
+          {typingUsers.length > 0 && (
+            <div className="typing-indicator">
+              {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+            </div>
+          )}
             <input 
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value)
+                onTyping()
+              }
+              }
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Type a message..."
               className="chat-input"

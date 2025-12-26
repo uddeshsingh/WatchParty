@@ -104,6 +104,8 @@
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  /* Ensure sidebar doesn't get crushed if window is small (non-mobile) */
+  min-width: 300px; 
 }
 
 .sidebar-header {
@@ -143,6 +145,7 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   width: 350px;
+  max-width: 90%; /* Responsive fix for small screens */
   box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 
@@ -260,7 +263,16 @@
 .chat-msg-system { color: var(--text-muted); font-size: 0.85em; font-style: italic; }
 .chat-msg-user strong { color: var(--primary); }
 .chat-msg-user span { color: var(--text-secondary); }
-.chat-input-area { padding: 10px; display: flex; gap: 8px; background: var(--bg-panel); }
+
+/* [FIX 1/2] Make relative so we can float the typing text */
+.chat-input-area { 
+  padding: 10px; 
+  display: flex; 
+  gap: 8px; 
+  background: var(--bg-panel);
+  position: relative; 
+}
+
 .chat-input {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
@@ -290,3 +302,65 @@
 ::-webkit-scrollbar-track { background: var(--bg-dark); }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+/* [FIX 2/2] Absolute positioning for Typing Indicator */
+.typing-indicator {
+  position: absolute;
+  top: -25px;       /* Move it UP outside the box */
+  left: 15px;       /* Align with the text input */
+  font-size: 0.8rem;
+  color: #aaa;      /* Grey color, or use var(--primary) for purple */
+  font-style: italic;
+  pointer-events: none; /* Ensures clicks pass through it */
+  white-space: nowrap;
+}
+
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  /* 1. Stack the layout (Video on top, Sidebar below) */
+  .main-content {
+    flex-direction: column;
+  }
+
+  /* 2. Sidebar takes full width */
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    flex: 1; /* Allow chat to grow */
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+  }
+
+  /* 3. Video takes fixed height (keeps aspect ratio decent) */
+  .video-stage {
+    flex: 0 0 auto;
+    height: 35vh; /* 35% of screen height for video */
+  }
+
+  /* 4. Adjust Playlist/UserList so Chat has space */
+  .playlist-section {
+    height: auto;
+    max-height: 120px; /* Don't let playlist steal all space */
+  }
+  .user-list-section {
+    max-height: 80px; /* Smaller user list on mobile */
+  }
+
+  /* 5. Tweak Navbar */
+  .navbar {
+    padding: 0 10px;
+  }
+  .logo {
+    font-size: 1.1rem;
+  }
+  .badge {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+  
+  /* 6. Hide volume slider on mobile to save space */
+  .volume-slider {
+    display: none;
+  }
+}

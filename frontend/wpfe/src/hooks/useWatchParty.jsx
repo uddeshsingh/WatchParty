@@ -14,10 +14,13 @@ export const useWatchParty = () => {
   const [videos, setVideos] = useState([]);
   const [currentVideo, setCurrentVideo] = useState(null);
   const [playing, setPlaying] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   const playerRef = useRef(null);
   const ws = useRef(null);
   const isHostRef = useRef(false);
+  const lastTypingTime = useRef(0);
+  const typingTimeout = useRef({});
 
   const isReady = useRef(false);
   const pendingSync = useRef(null);
@@ -46,6 +49,28 @@ export const useWatchParty = () => {
       );
     }
   };
+
+  const sendTypingSignal = () => {
+    console.log("1. sendTypingSignal function TRIGGERED!");
+    const now  = Date.now();
+    if (now - lastTypingTime.current < 3000){
+      console.log("2. BLOCKED by Throttle (Wait 3s)");
+      return;
+    } 
+    lastTypingTime.current = now;
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log("3. SENDING WebSocket Message now...");
+      ws.current.send(
+        JSON.stringify({
+          type: "typing",
+          username,
+        })
+      );
+    }
+    else {
+      console.log("4. WebSocket NOT OPEN - Cannot send typing signal");
+    }
+  }
 
   const handleServerMessage = (msg) => {
     // --- 1. NEW LOGIC: Sync Video ID on Join ---
@@ -129,6 +154,21 @@ export const useWatchParty = () => {
           });
       }
     }
+    if (msg.type === "typing") {
+      if (msg.username === username) return;
+      if (typingTimeout.current[msg.username]) {
+        clearTimeout(typingTimeout.current[msg.username]);
+      }
+      setTypingUsers((prev) => {
+        if (prev.includes(msg.username)) return prev;
+        return [...prev, msg.username];
+      });
+      typingTimeout.current[msg.username] = setTimeout(() => {
+        setTypingUsers((prev) =>
+          prev.filter((user) => user !== msg.username)
+        );
+      }, 4000);
+    }
   };
 
   const onPlay = (timeFromPlayer) => {
@@ -210,7 +250,7 @@ export const useWatchParty = () => {
         setMessages((prev) => [...prev, msg]);
 
       if (
-        ["play", "pause", "seek", "sync_state", "change_video"].includes(
+        ["play", "pause", "seek", "sync_state", "change_video", "typing"].includes(
           msg.type
         )
       ) {
@@ -262,5 +302,7 @@ export const useWatchParty = () => {
     toggleHost,
     sendNotification,
     changeVideo,
+    sendTypingSignal,
+    typingUsers,
   };
 };

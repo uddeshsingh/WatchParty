@@ -12,7 +12,7 @@ const Dashboard = ({ user, onLogout }) => {
   const {
     room, setRoom, username, setUsername, isHost, userList, myID,
     messages, videos, currentVideo, playing, playerRef, 
-    onReady, onPlay, onPause, onSeek, sendNotification, sendMessage, toggleHost, changeVideo
+    onReady, onPlay, onPause, onSeek, sendNotification, sendMessage, toggleHost, changeVideo, sendTypingSignal, typingUsers
   } = useWatchParty()
 
   useEffect(() => {
@@ -60,7 +60,7 @@ const Dashboard = ({ user, onLogout }) => {
                  else alert("Only the host can change the video!")
               }} 
           />
-          <ChatSidebar messages={messages} onSendMessage={sendMessage} />
+          <ChatSidebar messages={messages} onSendMessage={sendMessage} onTyping={sendTypingSignal} typingUsers={typingUsers} />
         </aside>
       </main>
     </div>
