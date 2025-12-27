@@ -11,6 +11,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const [messages, setMessages] = useState([]);
   const [myID, setMyID] = useState(null);
   const [lastReaction, setLastReaction] = useState(null);
+  const intentionalClose = useRef(false);
 
   const [videos, setVideos] = useState([]);
   const [currentVideo, setCurrentVideo] = useState(null);
@@ -22,7 +23,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const isHostRef = useRef(false);
   const lastTypingTime = useRef(0);
   const typingTimeout = useRef({});
-  const intentionalClose = useRef(false);
 
   const isReady = useRef(false);
   const pendingSync = useRef(null);
@@ -194,17 +194,26 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     setRoom(urlRoom);
   }, [urlRoom]);
 
+  // --- WEBSOCKET CONNECTION ---
   useEffect(() => {
-    if (!room || !username) return;
-
-    intentionalClose.current = false;
+    // 1. FIX: RESET STATE WHENEVER ROOM CHANGES
+    setVideos([]);
+    setCurrentVideo(null);
+    setPlaying(false);
     setError(null);
+    intentionalClose.current = false;
+
+    if (!room || !username) return;
 
     axios
       .get(`${API_URL}/api/videos/?room=${room}`)
       .then((res) => {
         setVideos(res.data);
-        if (res.data.length > 0 && !currentVideo) setCurrentVideo(res.data[0]);
+        // 2. FIX: REMOVED '!currentVideo' CHECK
+        // Since we just reset it to null above, we can safely set the first video
+        if (res.data.length > 0) {
+            setCurrentVideo(res.data[0]);
+        }
       })
       .catch((err) => console.error(err));
 
