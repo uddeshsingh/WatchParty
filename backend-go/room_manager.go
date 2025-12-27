@@ -8,62 +8,81 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Global State
 var rooms = make(map[string]*RoomState)
 var mutex = &sync.Mutex{}
 
-// CHANGED: Added 'action' parameter and 'error' return type
+// --- CORE LOGIC ---
+
 func JoinRoom(roomID, username string, ws *websocket.Conn, clientID string, action string) (string, bool, float64, bool, int, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	exists := rooms[roomID] != nil
+	room := rooms[roomID]
+	exists := room != nil
 
-	// RULE 1: If joining via Link (action="join"), Room MUST exist
+	// 1. Handle "Join" Action (Must Exist)
 	if action == "join" && !exists {
 		return "", false, 0, false, 0, fmt.Errorf("room_not_found")
 	}
 
-	// RULE 2: If Creating (action="create"), Room MUST NOT exist
+	// 2. Handle "Create" Action (Must NOT Exist, unless reconnecting)
 	if action == "create" && exists {
-		return "", false, 0, false, 0, fmt.Errorf("room_exists")
+		isReconnect := false
+		// Allow if user is ALREADY in the room (e.g. React Strict Mode refresh)
+		if room != nil {
+			for _, c := range room.Clients {
+				if c.Username == username {
+					isReconnect = true
+					break
+				}
+			}
+		}
+
+		if len(room.Clients) > 0 && !isReconnect {
+			return "", false, 0, false, 0, fmt.Errorf("room_exists")
+		}
 	}
 
-	// If room doesn't exist (and action is 'create'), make it
+	// 3. Initialize Room if needed
 	if !exists {
 		rooms[roomID] = &RoomState{
 			VideoID: 0, Timestamp: 0, Playing: false, LastUpdated: time.Now(),
 			Clients: make(map[string]*Client),
 		}
+		room = rooms[roomID]
 	}
-	room := rooms[roomID]
+
+	// 4. Cancel Deletion (Revive Room)
+	if room.DeleteTimer != nil {
+		room.DeleteTimer.Stop()
+		room.DeleteTimer = nil
+	}
 
 	client := &Client{ID: clientID, Conn: ws, Username: username}
 	room.AddClient(client)
 
+	// 5. Calculate Sync State
 	realTime := room.Timestamp
 	if room.Playing {
-		elapsed := time.Since(room.LastUpdated).Seconds()
-		realTime += elapsed
+		realTime += time.Since(room.LastUpdated).Seconds()
 	}
 
 	return client.ID, client.IsHost, realTime, room.Playing, room.VideoID, nil
 }
 
 func (r *RoomState) AddClient(client *Client) {
+	// Handle Session Swapping (Reconnects)
 	for id, existingClient := range r.Clients {
 		if existingClient.Username == client.Username {
-			fmt.Printf("♻️  Reclaiming session for %s\n", client.Username)
-
 			client.IsHost = existingClient.IsHost
 			client.ID = existingClient.ID
-
-			existingClient.Conn.Close()
+			existingClient.Conn.Close() // Close old socket
 			delete(r.Clients, id)
 			break
 		}
 	}
 
+	// Auto-Promote to Host if First
 	if len(r.Clients) == 0 {
 		client.IsHost = true
 	}
@@ -71,10 +90,84 @@ func (r *RoomState) AddClient(client *Client) {
 	r.Clients[client.ID] = client
 }
 
+func HandleDisconnect(roomID, clientID string, conn *websocket.Conn) {
+	mutex.Lock()
+
+	room := rooms[roomID]
+	if room == nil {
+		mutex.Unlock()
+		return
+	}
+
+	client := room.Clients[clientID]
+	if client == nil {
+		mutex.Unlock()
+		return
+	}
+
+	// IGNORE if this is an old connection (already swapped)
+	if client.Conn != conn {
+		mutex.Unlock()
+		return
+	}
+
+	// Save Timestamp before removing
+	if room.Playing {
+		room.Timestamp += time.Since(room.LastUpdated).Seconds()
+		room.LastUpdated = time.Now()
+	}
+
+	delete(room.Clients, clientID)
+
+	// IF EMPTY: Schedule Deletion (Grace Period)
+	if len(room.Clients) == 0 {
+		room.DeleteTimer = time.AfterFunc(10*time.Second, func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+			if _, ok := rooms[roomID]; ok && len(rooms[roomID].Clients) == 0 {
+				delete(rooms, roomID)
+			}
+		})
+		mutex.Unlock()
+		return
+	}
+
+	// HOST TRANSFER (if needed)
+	var newHost *Client
+	if client.IsHost {
+		for _, c := range room.Clients {
+			c.IsHost = true
+			newHost = c
+			break
+		}
+	}
+	mutex.Unlock()
+
+	if newHost != nil {
+		newHost.Conn.WriteJSON(Message{Type: "identity", UserID: newHost.ID, IsHost: true})
+		Broadcast(roomID, Message{Type: "system", Content: newHost.Username + " is now the Host."})
+	}
+
+	BroadcastUserList(roomID)
+}
+
+// --- HELPERS ---
+
+func GetActiveRooms() []RoomSummary {
+	mutex.Lock()
+	defer mutex.Unlock()
+	var summaries []RoomSummary
+	for name, state := range rooms {
+		if len(state.Clients) > 0 {
+			summaries = append(summaries, RoomSummary{Name: name, Count: len(state.Clients)})
+		}
+	}
+	return summaries
+}
+
 func HandleVideoCommand(roomID, clientID string, msg Message) bool {
 	mutex.Lock()
 	defer mutex.Unlock()
-
 	room := rooms[roomID]
 	if room == nil {
 		return false
@@ -87,105 +180,17 @@ func HandleVideoCommand(roomID, clientID string, msg Message) bool {
 
 	if msg.Type == "play" {
 		room.Playing = true
-		room.Timestamp = msg.Timestamp
-		room.LastUpdated = time.Now()
 	} else if msg.Type == "pause" {
 		room.Playing = false
-		room.Timestamp = msg.Timestamp
-		room.LastUpdated = time.Now()
-	} else if msg.Type == "seek" {
-		room.Timestamp = msg.Timestamp
-		room.LastUpdated = time.Now()
 	}
-
+	room.Timestamp = msg.Timestamp
+	room.LastUpdated = time.Now()
 	return true
-}
-
-func HandleAdminCommand(roomID, clientID string, msg Message) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	room := rooms[roomID]
-	if room == nil {
-		return
-	}
-
-	sender := room.Clients[clientID]
-	if sender == nil || !sender.IsHost {
-		return
-	}
-
-	targetID := msg.Content
-	if target, ok := room.Clients[targetID]; ok {
-		target.IsHost = (msg.Type == "grant_control")
-		target.Conn.WriteJSON(Message{Type: "identity", UserID: target.ID, IsHost: target.IsHost})
-	}
-}
-
-func HandleDisconnect(roomID, clientID string) {
-	mutex.Lock()
-
-	room := rooms[roomID]
-	if room == nil {
-		mutex.Unlock()
-		return
-	}
-
-	leavingClient := room.Clients[clientID]
-	if leavingClient == nil {
-		mutex.Unlock()
-		return
-	}
-
-	// SAVE STATE
-	if room.Playing {
-		room.Timestamp += time.Since(room.LastUpdated).Seconds()
-		room.LastUpdated = time.Now()
-	}
-
-	delete(room.Clients, clientID)
-
-	if len(room.Clients) == 0 {
-		delete(rooms, roomID)
-		mutex.Unlock()
-		return
-	}
-
-	// HOST TRANSFER
-	var newHost *Client
-	if leavingClient.IsHost {
-		// Check if anyone else is already host (shouldn't happen usually)
-		hasOtherHost := false
-		for _, c := range room.Clients {
-			if c.IsHost {
-				hasOtherHost = true
-				break
-			}
-		}
-		if !hasOtherHost {
-			// Promote first available
-			for _, c := range room.Clients {
-				c.IsHost = true
-				newHost = c
-				break
-			}
-		}
-	}
-	mutex.Unlock() // Unlock before broadcasting
-
-	if newHost != nil {
-		fmt.Printf("👑 Host left. New Host: %s\n", newHost.Username)
-		newHost.Conn.WriteJSON(Message{Type: "identity", UserID: newHost.ID, IsHost: true})
-		Broadcast(roomID, Message{Type: "system", Content: newHost.Username + " is now the Host."})
-	}
-
-	BroadcastUserList(roomID)
 }
 
 func HandleChangeVideo(roomID, clientID string, msg Message) bool {
 	mutex.Lock()
 	defer mutex.Unlock()
-
 	room := rooms[roomID]
 	if room == nil {
 		return false
@@ -200,33 +205,31 @@ func HandleChangeVideo(roomID, clientID string, msg Message) bool {
 	room.Timestamp = 0
 	room.Playing = false
 	room.LastUpdated = time.Now()
-
 	return true
 }
 
-func GetActiveRooms() []RoomSummary {
+func HandleAdminCommand(roomID, clientID string, msg Message) {
 	mutex.Lock()
 	defer mutex.Unlock()
-
-	var summaries []RoomSummary
-	for name, state := range rooms {
-		if len(state.Clients) > 0 {
-			summaries = append(summaries, RoomSummary{
-				Name:  name,
-				Count: len(state.Clients),
-			})
-		}
+	room := rooms[roomID]
+	if room == nil {
+		return
 	}
-	return summaries
-}
 
-// --- 4. BROADCAST HELPERS ---
+	sender := room.Clients[clientID]
+	if sender == nil || !sender.IsHost {
+		return
+	}
+
+	if target, ok := room.Clients[msg.Content]; ok {
+		target.IsHost = (msg.Type == "grant_control")
+		target.Conn.WriteJSON(Message{Type: "identity", UserID: target.ID, IsHost: target.IsHost})
+	}
+}
 
 func Broadcast(roomID string, msg Message) {
 	mutex.Lock()
 	room := rooms[roomID]
-	// We need to copy clients to a slice so we can unlock quickly
-	// This prevents deadlocks if a WriteJSON blocks
 	var conns []*websocket.Conn
 	if room != nil {
 		for _, c := range room.Clients {
@@ -234,7 +237,6 @@ func Broadcast(roomID string, msg Message) {
 		}
 	}
 	mutex.Unlock()
-
 	for _, conn := range conns {
 		conn.WriteJSON(msg)
 	}
@@ -245,7 +247,6 @@ func BroadcastUserList(roomID string) {
 	room := rooms[roomID]
 	var list []UserSummary
 	var conns []*websocket.Conn
-
 	if room != nil {
 		for _, c := range room.Clients {
 			list = append(list, UserSummary{ID: c.ID, Username: c.Username, IsHost: c.IsHost})
@@ -253,7 +254,6 @@ func BroadcastUserList(roomID string) {
 		}
 	}
 	mutex.Unlock()
-
 	msg := Message{Type: "user_list", UserList: list}
 	for _, conn := range conns {
 		conn.WriteJSON(msg)

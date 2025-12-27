@@ -2,17 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { API_URL, WS_URL } from "../components/Config";
 
-// CHANGED: Accept 'action' (join/create)
 export const useWatchParty = (urlRoom = null, action = "join") => {
   const [room, setRoom] = useState(urlRoom);
-  const [error, setError] = useState(null); // CHANGED: Error state
+  const [error, setError] = useState(null);
   const [username, setUsername] = useState(null);
   const [isHost, setIsHost] = useState(false);
   const [userList, setUserList] = useState([]);
   const [messages, setMessages] = useState([]);
   const [myID, setMyID] = useState(null);
   const [lastReaction, setLastReaction] = useState(null);
-  const intentionalClose = useRef(false);
 
   const [videos, setVideos] = useState([]);
   const [currentVideo, setCurrentVideo] = useState(null);
@@ -24,6 +22,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const isHostRef = useRef(false);
   const lastTypingTime = useRef(0);
   const typingTimeout = useRef({});
+  const intentionalClose = useRef(false);
 
   const isReady = useRef(false);
   const pendingSync = useRef(null);
@@ -36,19 +35,15 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   };
 
   const sendReaction = (emoji) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+    if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(
-        JSON.stringify({
-          type: "reaction",
-          username,
-          content: emoji,
-        })
+        JSON.stringify({ type: "reaction", username, content: emoji })
       );
     }
   };
 
   const sendNotification = (type) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+    if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type, username, room }));
     }
   };
@@ -56,37 +51,24 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const changeVideo = (videoId) => {
     if (ws.current && isHostRef.current) {
       ws.current.send(
-        JSON.stringify({
-          type: "change_video",
-          username,
-          video_id: videoId,
-        })
+        JSON.stringify({ type: "change_video", username, video_id: videoId })
       );
     }
   };
 
   const sendTypingSignal = () => {
     const now = Date.now();
-    if (now - lastTypingTime.current < 3000) {
-      return;
-    }
+    if (now - lastTypingTime.current < 3000) return;
     lastTypingTime.current = now;
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(
-        JSON.stringify({
-          type: "typing",
-          username,
-        })
-      );
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: "typing", username }));
     }
   };
 
   const handleServerMessage = (msg) => {
     if (msg.type === "sync_state") {
       if (msg.video_id && (!currentVideo || currentVideo.id !== msg.video_id)) {
-        console.log("🔄 Syncing to Host Video ID:", msg.video_id);
         const syncedVideo = videos.find((v) => v.id === msg.video_id);
-
         if (syncedVideo) {
           isReady.current = false;
           setCurrentVideo(syncedVideo);
@@ -121,9 +103,8 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       const currentTime = playerRef.current
         ? playerRef.current.getCurrentTime()
         : 0;
-      if (Math.abs(currentTime - msg.timestamp) > 1.0) {
+      if (Math.abs(currentTime - msg.timestamp) > 1.0)
         playerSeekTo(msg.timestamp);
-      }
       setPlaying(true);
     }
 
@@ -134,9 +115,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     }
 
     if (msg.type === "change_video") {
-      console.log("🎬 Switching to Video ID:", msg.video_id);
       const nextVideo = videos.find((v) => v.id === msg.video_id);
-
       if (nextVideo) {
         isReady.current = false;
         setCurrentVideo(nextVideo);
@@ -154,11 +133,11 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         });
       }
     }
+
     if (msg.type === "typing") {
       if (msg.username === username) return;
-      if (typingTimeout.current[msg.username]) {
+      if (typingTimeout.current[msg.username])
         clearTimeout(typingTimeout.current[msg.username]);
-      }
       setTypingUsers((prev) => {
         if (prev.includes(msg.username)) return prev;
         return [...prev, msg.username];
@@ -177,31 +156,17 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     }
   };
 
-  const onPlay = (timeFromPlayer) => {
-    if (remoteState.current === "play") {
-      remoteState.current = null;
-      return;
-    }
-    const t = typeof timeFromPlayer === "number" ? timeFromPlayer : 0;
-    if (isHostRef.current) sendSignal("play", t);
+  const onPlay = (t) => {
+    if (remoteState.current !== "play" && isHostRef.current)
+      sendSignal("play", t || 0);
   };
-
-  const onPause = (timeFromPlayer) => {
-    if (remoteState.current === "pause") {
-      remoteState.current = null;
-      return;
-    }
-    const t = typeof timeFromPlayer === "number" ? timeFromPlayer : 0;
-    if (isHostRef.current) sendSignal("pause", t);
+  const onPause = (t) => {
+    if (remoteState.current !== "pause" && isHostRef.current)
+      sendSignal("pause", t || 0);
   };
-
-  const onSeek = (seconds) => {
-    if (!isReady.current) return;
-    if (remoteState.current === "seek") {
-      remoteState.current = null;
-      return;
-    }
-    if (isHostRef.current) sendSignal("seek", seconds);
+  const onSeek = (t) => {
+    if (isReady.current && remoteState.current !== "seek" && isHostRef.current)
+      sendSignal("seek", t);
   };
 
   const onReady = () => {
@@ -214,13 +179,12 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   };
 
   const sendSignal = (type, payload = null) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    const timestamp = payload !== null ? payload : 0;
+    if (ws.current?.readyState !== WebSocket.OPEN) return;
     ws.current.send(
       JSON.stringify({
         type,
         username,
-        timestamp,
+        timestamp: payload || 0,
         video_id: currentVideo ? currentVideo.id : 0,
       })
     );
@@ -232,6 +196,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
 
   useEffect(() => {
     if (!room || !username) return;
+
     intentionalClose.current = false;
     setError(null);
 
@@ -243,7 +208,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       })
       .catch((err) => console.error(err));
 
-    const wsUrl = `${WS_URL}?room=${room}&username=${username}&action=${action}`;
+    const wsUrl = `${WS_URL}/ws?room=${room}&username=${username}&action=${action}`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onmessage = (event) => {
@@ -281,7 +246,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       }
 
       if (msg.type === "new_video") {
-        console.log("🆕 New video added! Refreshing list...");
         axios
           .get(`${API_URL}/api/videos/?room=${room}`)
           .then((res) => setVideos(res.data));
@@ -289,14 +253,11 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     };
 
     ws.current.onclose = () => {
-        console.log("🔌 WebSocket Disconnected");
-        if (!intentionalClose.current) {
-            if (action === "join") {
-                setError("room_not_found_silent"); 
-            } else {
-                setError("connection_lost");
-            }
-        }
+      if (!intentionalClose.current) {
+        setError(
+          action === "join" ? "room_not_found_silent" : "connection_lost"
+        );
+      }
     };
 
     return () => {

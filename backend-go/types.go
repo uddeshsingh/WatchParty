@@ -21,6 +21,7 @@ type RoomState struct {
 	Playing     bool               `json:"playing"`
 	LastUpdated time.Time          `json:"-"`
 	Clients     map[string]*Client `json:"-"`
+	DeleteTimer *time.Timer        `json:"-"` // Helper for 10s grace period
 }
 
 type Message struct {
