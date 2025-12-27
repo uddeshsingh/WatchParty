@@ -32,13 +32,12 @@ const RoomSelector = ({ onJoin }) => {
     if (!newRoom.trim()) return;
     const cleanName = newRoom.trim().replace(/\s+/g, "-").toLowerCase();
 
-    // CHANGED: Check local list first
     if (rooms.find((r) => r.name === cleanName)) {
       alert("Room Name Taken! Please join the existing room.");
       return;
     }
 
-    // CHANGED: Pass 'create' mode
+    // --- FIX 1: PASS "create" HERE ---
     onJoin(cleanName, "create");
   };
 
@@ -74,7 +73,7 @@ const RoomSelector = ({ onJoin }) => {
             )}
 
             {rooms.map((r) => (
-              // CHANGED: Pass 'join' mode
+              // --- FIX 2: PASS "join" HERE ---
               <div
                 key={r.name}
                 className="room-card"
