@@ -8,8 +8,8 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
-import sys        # <--- Added for logging
-import traceback  # <--- Added for logging
+import sys
+import traceback
 
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
@@ -32,32 +32,40 @@ class AddVideo(APIView):
             return Response({"error": "URL is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # --- IMPROVED YT-DLP OPTIONS ---
+            # --- ROBUST YT-DLP OPTIONS ---
             ydl_opts = {
                 'quiet': True,
-                'skip_download': True,
-                'nocheckcertificate': True, # Fixes SSL errors in some containers
-                'ignoreerrors': True,       # Prevents crashing on minor warnings
                 'no_warnings': True,
-                'default_search': 'auto',
-                'source_address': '0.0.0.0', # Force IPv4 (Fixes deployment networking issues)
-                'extract_flat': False,
+                'skip_download': True,
+                'nocheckcertificate': True, 
+                
+                # CRITICAL FIX 1: See the REAL error if it fails
+                'ignoreerrors': False, 
+
+                # CRITICAL FIX 2: Pretend to be a real browser (Anti-blocking)
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                
+                # CRITICAL FIX 3: Force IPv4 (Cloud Run IPv6 is often blocked)
+                'source_address': '0.0.0.0',
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # 'process': False avoids downloading/processing, just grabs JSON
                 info = ydl.extract_info(url, download=False)
                 
-                # Handle cases where ignoreerrors=True returns None
                 if not info:
-                    print("❌ yt-dlp failed to extract info (returned None)", file=sys.stderr)
-                    return Response({"error": "Failed to extract video info"}, status=status.HTTP_400_BAD_REQUEST)
+                    raise Exception("YouTube returned no data (likely blocked).")
 
-                # 'entries' is present if it's a playlist or search result
+                # Handle playlist/search results
                 if 'entries' in info:
                     info = info['entries'][0]
 
                 title = info.get('title', 'Unknown Video')
                 thumbnail = info.get('thumbnail', '')
+
+                # Fallback for thumbnail if missing
+                if not thumbnail and 'id' in info:
+                    thumbnail = f"https://img.youtube.com/vi/{info['id']}/hqdefault.jpg"
 
                 # Save to Database
                 video = Video.objects.create(
@@ -71,7 +79,10 @@ class AddVideo(APIView):
                 return Response(VideoSerializer(video).data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            # --- LOGGING THE ACTUAL ERROR ---
-            print(f"❌ ERROR ADDING VIDEO: {str(e)}", file=sys.stderr)
-            traceback.print_exc() # Prints full stack trace to server logs
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # Log the full error to your Cloud Run logs
+            error_msg = str(e)
+            print(f"❌ ERROR ADDING VIDEO: {error_msg}", file=sys.stderr)
+            traceback.print_exc() 
+            
+            # Return the SPECIFIC error to the frontend so we know what's wrong
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
