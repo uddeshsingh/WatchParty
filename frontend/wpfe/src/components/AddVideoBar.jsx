@@ -8,24 +8,38 @@ const AddVideoBar = ({ room, onVideoAdded }) => {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!url.trim()) return;
+const handleAdd = async (e) => {
+  e.preventDefault();
+  if (!url.trim()) return;
 
-    setLoading(true);
-    try {
-      // 2. USE API_URL
-      await axios.post(`${API_URL}/api/videos/add/`, { url, room });
-      setUrl("");
-
-      if (onVideoAdded) onVideoAdded();
-    } catch (err) {
-      console.error("Failed to add video", err);
-      alert("Could not add video. Check console.");
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    // 1. Fetch Metadata from Client Side (Bypasses Server Block)
+    const metaRes = await axios.get(`https://noembed.com/embed?url=${url}`);
+    
+    if (metaRes.data.error) {
+        throw new Error("Invalid Video URL");
     }
-  };
+
+    const title = metaRes.data.title;
+    const thumbnail = metaRes.data.thumbnail_url;
+
+    // 2. Send EVERYTHING to Backend
+    await axios.post(`${API_URL}/api/videos/add/`, { 
+        url, 
+        room, 
+        title,      // <--- Sending title
+        thumbnail   // <--- Sending thumbnail
+    });
+    
+    setUrl("");
+    if (onVideoAdded) onVideoAdded();
+  } catch (err) {
+    alert("Failed to add video", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <form onSubmit={handleAdd} className="add-video-form">

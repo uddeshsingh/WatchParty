@@ -27,6 +27,18 @@ class AddVideo(APIView):
     def post(self, request):
         url = request.data.get('url')
         room = request.data.get('room', 'general')
+        title = request.data.get('title')
+        thumbnail = request.data.get('thumbnail')
+
+        if title and thumbnail:
+            # TRUST THE FRONTEND
+            video = Video.objects.create(
+                title=title,
+                video_url=url,
+                thumbnail=thumbnail,
+                room=room
+            )
+            return Response(VideoSerializer(video).data, status=status.HTTP_201_CREATED)
         
         if not url:
             return Response({"error": "URL is required"}, status=status.HTTP_400_BAD_REQUEST)
