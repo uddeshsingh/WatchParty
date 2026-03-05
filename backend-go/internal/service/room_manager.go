@@ -192,6 +192,7 @@ func (s *RoomService) JoinRoom(ctx context.Context, roomID, action string, clien
 		ID:       client.ID,
 		Username: client.Username,
 		IsHost:   client.IsHost,
+		JoinedAt: time.Now(),
 	}
 
 	s.RegisterLocalClient(roomID, client)
@@ -245,10 +246,24 @@ func (s *RoomService) LeaveRoom(ctx context.Context, roomID string, client *doma
 				}
 			}
 			if !hasHost {
-				for id, u := range state.Clients {
-					u.IsHost = true
-					state.Clients[id] = u
-					break
+				if !hasHost {
+					var oldestUser string
+					var oldestTime time.Time
+					first := true
+
+					for id, u := range state.Clients {
+						if first || u.JoinedAt.Before(oldestTime) {
+							oldestTime = u.JoinedAt
+							oldestUser = id
+							first = false
+						}
+					}
+
+					if oldestUser != "" {
+						u := state.Clients[oldestUser]
+						u.IsHost = true
+						state.Clients[oldestUser] = u
+					}
 				}
 			}
 

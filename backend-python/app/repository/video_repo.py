@@ -30,3 +30,10 @@ class VideoRepoImpl(VideoRepository):
     def delete_videos_by_room(self, room: str) -> None:
         self.db.query(VideoModel).filter(VideoModel.room == room).delete()
         self.db.commit()
+    
+    # Add to VideoRepoImpl class
+    def get_video_by_url(self, url: str) -> VideoResponse | None:
+        db_video = self.db.query(VideoModel).filter(VideoModel.video_url == url).first()
+        if db_video:
+            return VideoResponse.model_validate(db_video)
+        return None

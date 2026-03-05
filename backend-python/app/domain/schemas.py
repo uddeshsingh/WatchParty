@@ -42,3 +42,14 @@ class VideoResponse(BaseModel):
 
 class MetadataReq(BaseModel):
     video_ids: List[int]
+
+class PubSubMessage(BaseModel):
+    type: str
+    username: str
+    user_id: str = ""
+    content: str = ""
+    timestamp: float = 0.0
+    video_id: int = 0
+    room: str
+    is_host: bool = False
+    data: Optional[dict] = None

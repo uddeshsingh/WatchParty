@@ -25,22 +25,29 @@ class VideoService(VideoManager):
                 
             return saved_video
 
-        # 2. Otherwise, fetch it securely WITHOUT yt-dlp
-        metadata = fetch_video_metadata(str(req.url))
+        # 🚨 2. Check the Database Cache First
+        cached_video = self.repo.get_video_by_url(str(req.url))
+        
+        if cached_video:
+            title = cached_video.title
+            thumbnail = cached_video.thumbnail
+        else:
+            # 3. Only scrape if it's a completely new URL
+            metadata = fetch_video_metadata(str(req.url))
+            title = metadata.get('title') or 'Unknown Video'
+            thumbnail = metadata.get('thumbnail') or "https://via.placeholder.com/640x360.png?text=Video+Added"
 
         data = {
-            "title": metadata.get('title') or 'Unknown Video',
+            "title": title,
             "video_url": str(req.url), 
-            # Use fetched thumbnail or a generic fallback image
-            "thumbnail": metadata.get('thumbnail') or "https://via.placeholder.com/640x360.png?text=Video+Added",
+            "thumbnail": thumbnail,
             "room": req.room
         }
         
         saved_video = self.repo.save_video(data)
         
         if self.publisher:
-            video_json_data = saved_video.model_dump(mode='json')
-            self.publisher.broadcast_video_added(req.room, video_json_data)
+            self.publisher.broadcast_video_added(req.room, saved_video.model_dump(mode='json'))
             
         return saved_video
 

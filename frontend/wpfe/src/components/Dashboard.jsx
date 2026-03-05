@@ -44,6 +44,7 @@ const Dashboard = ({ user, onLogout }) => {
     changeVideo,
     sendTypingSignal,
     typingUsers,
+    onEnded
   } = useWatchParty(roomId, action);
 
   useEffect(() => {
@@ -133,6 +134,7 @@ const Dashboard = ({ user, onLogout }) => {
                 onPlay={onPlay}
                 onPause={onPause}
                 onSeek={onSeek}
+                onEnded={onEnded}
               />
             ) : (
               <div

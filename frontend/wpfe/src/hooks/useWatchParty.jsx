@@ -314,6 +314,17 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     }
   };
 
+  const onEnded = () => {
+    if (!isHostRef.current) return; // Only the host controls the queue
+
+    const currentIndex = videosRef.current.findIndex(v => v.id === currentVideoRef.current?.id);
+    if (currentIndex !== -1 && currentIndex + 1 < videosRef.current.length) {
+      const nextVideo = videosRef.current[currentIndex + 1];
+      // Auto-play the next video
+      changeVideo(nextVideo.id);
+    }
+  };
+
   const sendSignal = (type, payload = null) => {
     if (ws.current?.readyState !== WebSocket.OPEN) return;
     const payloadMsg = {
@@ -412,12 +423,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     };
   }, [room, username, action]);
 
-    return () => {
-      intentionalClose.current = true;
-      if (ws.current) ws.current.close();
-    };
-  }, [room, username, action]);
-
   const sendMessage = (text) =>
     ws.current.send(
       JSON.stringify({
@@ -464,5 +469,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     changeVideo,
     sendTypingSignal,
     setRoom,
+    onEnded,
   };
 };

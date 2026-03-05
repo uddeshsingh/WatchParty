@@ -34,7 +34,7 @@ const GuestControls = ({
 );
 
 const VideoPlayer = forwardRef(
-  ({ url, playing, onReady, onPlay, onPause, onSeek, isHost }, ref) => {
+  ({ url, playing, onReady, onPlay, onPause, onSeek, isHost, onEnded }, ref) => {
     const [volume, setVolume] = useState(0.8);
     const [muted, setMuted] = useState(true);
     const wrapperRef = useRef(null);
@@ -116,6 +116,9 @@ const VideoPlayer = forwardRef(
               if (internalPlayer && internalPlayer.playVideo)
                 internalPlayer.playVideo();
             }
+          }}
+          onEnded={() => {
+            if (onEnded) onEnded();
           }}
           onProgress={(state) => {
             const current = state.playedSeconds;

@@ -29,9 +29,10 @@ type RoomSummary struct {
 }
 
 type UserSummary struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	IsHost   bool   `json:"is_host"`
+	ID       string    `json:"id"`
+	Username string    `json:"username"`
+	IsHost   bool      `json:"is_host"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 type Message struct {
