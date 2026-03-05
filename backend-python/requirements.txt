@@ -4,10 +4,11 @@ sqlalchemy>=2.0.27
 pydantic>=2.6.3
 pydantic-settings>=2.2.1
 google-cloud-pubsub>=2.20.0
-yt-dlp==2025.12.8
-gunicorn
 psycopg2-binary>=2.9.9
-passlib 
-bcrypt 
+requests==2.31.0
+beautifulsoup4==4.12.3
+gunicorn
+passlib
+bcrypt
 google-auth
 PyJWT
