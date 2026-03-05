@@ -35,7 +35,6 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 			roomID = "general"
 		}
 
-		// 🚨 SECURE JWT VERIFICATION
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
 			secret = "super-secret-fallback"
@@ -133,6 +132,8 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 			}
 
 			switch msg.Type {
+			case "ping":
+				continue
 			case "play", "pause", "seek", "sync_state":
 				if err := rm.HandleVideoCommand(r.Context(), roomID, msg); err != nil {
 					log.Printf("Failed video command: %v", err)

@@ -49,9 +49,15 @@ const Dashboard = ({ user, onLogout }) => {
   useEffect(() => {
     if (error && !hasAlerted.current) {
       hasAlerted.current = true;
-      alert(
-        error === "room_exists" ? "Room name taken!" : "Room does not exist!",
-      );
+
+      let alertMsg = error;
+      if (error === "room_exists") alertMsg = "Room name taken!";
+      else if (error === "room_not_found_silent")
+        alertMsg = "Room does not exist!";
+      else if (error === "connection_lost")
+        alertMsg = "Connection lost. Please rejoin.";
+
+      alert(alertMsg);
       navigate("/");
     }
   }, [error, navigate]);

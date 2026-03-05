@@ -43,6 +43,10 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const [typingUsers, setTypingUsers] = useState([]);
 
   const playerRef = useRef(null);
+  const playingRef = useRef(false);
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
   const ws = useRef(null);
   const lastTypingTime = useRef(0);
   const typingTimeout = useRef({});
@@ -112,8 +116,15 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
 
     if (msg.type === "request_sync") {
         if (isHostRef.current && playerRef.current) {
-            const currentTime = playerRef.current.getCurrentTime();            
-            sendSignal("sync_state", currentTime); 
+            const currentTime = playerRef.current.getCurrentTime(); 
+            ws.current.send(JSON.stringify({
+                type: "sync_state",
+                username: usernameRef.current,
+                room: room,
+                timestamp: currentTime,
+                video_id: currentVideoRef.current ? currentVideoRef.current.id : 0,
+                content: playingRef.current ? "playing" : "paused" 
+            }));
         }
         return;
     }
@@ -383,6 +394,23 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
           action === "join" ? "room_not_found_silent" : "connection_lost",
         );
     };
+
+    const heartbeat = setInterval(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: "ping",
+          username: username,
+          room: room
+        }));
+      }
+    }, 25000);
+
+    return () => {
+      clearInterval(heartbeat);
+      intentionalClose.current = true;
+      if (ws.current) ws.current.close();
+    };
+  }, [room, username, action]);
 
     return () => {
       intentionalClose.current = true;
