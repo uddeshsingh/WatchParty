@@ -53,6 +53,7 @@ jobs:
           service: watchparty-api
           region: us-central1
           source: ./backend-python
+          flags: --add-cloudsql-instances=watchparty-482106:us-central1:watchparty-db          
           env_vars: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}

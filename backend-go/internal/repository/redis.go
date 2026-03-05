@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"wpbe/internal/domain"
@@ -15,18 +17,24 @@ type RedisRepo struct {
 }
 
 func NewRedisRepo(addr string) (*RedisRepo, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr: addr,
-	})
-
-	if err := client.Ping(context.Background()).Err(); err != nil {
-		return nil, err
+	// This automatically handles the rediss:// protocol for TLS
+	opt, err := redis.ParseURL(addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse upstash url: %v", err)
 	}
 
-	ctx := context.Background()
-	iter := client.Scan(ctx, 0, "room_state:*", 0).Iterator()
-	for iter.Next(ctx) {
-		client.Del(ctx, iter.Val())
+	// Explicitly set TLS for Upstash compatibility
+	opt.TLSConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	client := redis.NewClient(opt)
+
+	// Check connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("upstash connection failed: %v", err)
 	}
 
 	return &RedisRepo{client: client}, nil
