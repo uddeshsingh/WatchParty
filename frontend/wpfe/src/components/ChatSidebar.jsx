@@ -89,7 +89,7 @@ const ChatSidebar = ({
           <FaSmile />
         </button>
 
-        <button onClick={handleSend} className="chat-send-btn">
+        <button onClick={handleSend} className="chat-send-btn" aria-label="Send">
           <FaPaperPlane />
         </button>
       </div>

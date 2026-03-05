@@ -9,14 +9,14 @@ import UserList from "./UserList";
 import RoomSelector from "./RoomSelector";
 import AddVideoBar from "./AddVideoBar";
 import ReactionOverlay from "./ReactionOverlay";
+import axios from "axios";
+import { API_URL } from "./Config";
 
 const Dashboard = ({ user, onLogout }) => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const hasAlerted = useRef(false);
-
-  // CHANGED: Get action from state (default to 'join')
   const action = location.state?.action || "join";
 
   const {
@@ -50,7 +50,7 @@ const Dashboard = ({ user, onLogout }) => {
     if (error && !hasAlerted.current) {
       hasAlerted.current = true;
       alert(
-        error === "room_exists" ? "Room name taken!" : "Room does not exist!"
+        error === "room_exists" ? "Room name taken!" : "Room does not exist!",
       );
       navigate("/");
     }
@@ -117,16 +117,34 @@ const Dashboard = ({ user, onLogout }) => {
         <section className="video-stage">
           <div className="player-container">
             <ReactionOverlay lastReaction={lastReaction} />
-            <VideoPlayer
-              ref={playerRef}
-              url={currentVideo?.video_url}
-              playing={playing}
-              isHost={isHost}
-              onReady={onReady}
-              onPlay={onPlay}
-              onPause={onPause}
-              onSeek={onSeek}
-            />
+            {currentVideo ? (
+              <VideoPlayer
+                ref={playerRef}
+                url={currentVideo.video_url}
+                playing={playing}
+                isHost={isHost}
+                onReady={onReady}
+                onPlay={onPlay}
+                onPause={onPause}
+                onSeek={onSeek}
+              />
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  color: "#666",
+                }}
+              >
+                <FaFilm
+                  size={50}
+                  style={{ marginBottom: "15px", opacity: 0.5 }}
+                />
+                <h2>No video selected</h2>
+                <p>Paste a YouTube link in the sidebar to start the party!</p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -143,6 +161,13 @@ const Dashboard = ({ user, onLogout }) => {
           />
           <VideoList
             videos={videos}
+            isHost={isHost}
+            onDelete={async (videoId) => {
+              await axios.delete(
+                `${API_URL}/api/videos/${videoId}?room=${room}`,
+              );
+              sendNotification("playlist_updated");
+            }}
             onSelect={(video) => {
               if (isHost) changeVideo(video.id);
               else alert("Only the host can change the video!");

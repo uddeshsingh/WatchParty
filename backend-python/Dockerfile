@@ -1,17 +1,14 @@
-# backend-python/Dockerfile
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Set work directory
 WORKDIR /app
 
-# Install dependencies
-# We copy requirements.txt first to leverage Docker cache
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Copy project files
 COPY . .
 
-# Run the application using Gunicorn (Production Server)
-# Cloud Run injects the PORT environment variable automatically
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 core.wsgi:application
+RUN echo '#!/bin/bash\npython -m app.pubsub.gcp_listener &\nexec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}' > /start.sh && chmod +x /start.sh
+
+CMD ["/start.sh"]

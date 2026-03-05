@@ -1,19 +1,42 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaPlus, FaUserFriends, FaDoorOpen } from "react-icons/fa";
-import { WS_URL } from "./Config";
+import { FaPlus, FaUserFriends, FaDoorOpen, FaFilm } from "react-icons/fa";
+import { WS_URL, API_URL } from "./Config";
 
 const RoomSelector = ({ onJoin }) => {
   const [rooms, setRooms] = useState([]);
   const [newRoom, setNewRoom] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const GO_API_URL = WS_URL.replace("ws", "http");
+  // Derive standard HTTP URL from the WS URL
+  const GO_API_URL = WS_URL.replace("ws", "http").replace("wss", "https");
 
   const fetchRooms = async () => {
     try {
+      // 1. Fetch live room state from Go Redis
       const res = await axios.get(`${GO_API_URL}/rooms`);
-      setRooms(res.data || []);
+      const activeRooms = res.data || [];
+
+      // 2. Extract active video IDs to fetch metadata from Python Postgres
+      const videoIds = activeRooms
+        .map((r) => r.video_id)
+        .filter((id) => id > 0);
+
+      if (videoIds.length > 0) {
+        const metaRes = await axios.post(`${API_URL}/api/videos/metadata`, {
+          video_ids: videoIds,
+        });
+        const metadata = metaRes.data;
+
+        // 3. Merge metadata with the active rooms
+        const enrichedRooms = activeRooms.map((room) => {
+          const videoInfo = metadata.find((v) => v.id === room.video_id);
+          return { ...room, videoTitle: videoInfo ? videoInfo.title : "Idle" };
+        });
+        setRooms(enrichedRooms);
+      } else {
+        setRooms(activeRooms);
+      }
     } catch (err) {
       console.error("Failed to fetch rooms", err);
     } finally {
@@ -37,7 +60,6 @@ const RoomSelector = ({ onJoin }) => {
       return;
     }
 
-    // --- FIX 1: PASS "create" HERE ---
     onJoin(cleanName, "create");
   };
 
@@ -73,7 +95,6 @@ const RoomSelector = ({ onJoin }) => {
             )}
 
             {rooms.map((r) => (
-              // --- FIX 2: PASS "join" HERE ---
               <div
                 key={r.name}
                 className="room-card"
@@ -83,6 +104,13 @@ const RoomSelector = ({ onJoin }) => {
                   <FaDoorOpen />
                 </div>
                 <div className="room-card-name">{r.name}</div>
+                
+                {/* Cleaned up metadata container */}
+                <div className="room-card-meta">
+                  <FaFilm style={{flexShrink: 0}} /> 
+                  <span className="meta-text">{r.videoTitle || 'Idle'}</span>
+                </div>
+
                 <div className="room-card-stats">
                   <FaUserFriends /> {r.count}{" "}
                   {r.count === 1 ? "Viewer" : "Viewers"}

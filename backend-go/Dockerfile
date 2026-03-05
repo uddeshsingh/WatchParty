@@ -1,17 +1,16 @@
-# backend-go/Dockerfile
-FROM golang:1.25
+FROM golang:1.25-alpine
 
 WORKDIR /app
+# Install git for private modules if necessary
+RUN apk add --no-cache git
 
-# Copy modules first for caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source
 COPY . .
+# 🚨 FIX: Build the actual entrypoint path
+RUN go build -o server ./cmd/server/main.go
 
-# Build
-RUN go build -o server .
-
-# Run
+# Cloud Run expects the app to listen on $PORT
+EXPOSE 8080
 CMD ["./server"]

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
 import { FaFilm } from "react-icons/fa";
-import { API_URL } from "../components/Config";
+import { API_URL } from "./Config"; 
 
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -17,9 +17,12 @@ const LoginPage = ({ onLogin }) => {
 
   const from = location.state?.from?.pathname || "/";
 
-  const handleSuccess = (username) => {
-    localStorage.setItem("watchparty_user", username);
-    onLogin(username);
+  const handleSuccess = (userData, token) => {
+    localStorage.setItem("watchparty_user", userData.username);
+    localStorage.setItem("watchparty_token", token);
+    
+    // Pass ONLY the string to the App state so React doesn't crash
+    onLogin(userData.username); 
     navigate(from, { replace: true });
   };
 
@@ -38,27 +41,29 @@ const LoginPage = ({ onLogin }) => {
       : { username, password };
 
     try {
-      // 2. USE API_URL
       const res = await axios.post(`${API_URL}/api/auth/${endpoint}`, payload);
-      const user = res.data.user || res.data;
-      if (user.username || username) handleSuccess(user.username || username);
+      // Pass the nested user object and token safely
+      if (res.data.token) {
+        handleSuccess(res.data.user, res.data.token);
+      }
     } catch (err) {
       console.error(err);
-      const msg = err.response?.data
-        ? JSON.stringify(err.response.data)
+      // Safely extract the error string from FastAPI
+      const msg = err.response?.data?.detail 
+        ? err.response.data.detail 
         : "Login failed.";
-      setError(msg);
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      // 3. USE API_URL
       const res = await axios.post(`${API_URL}/api/auth/google/`, {
         access_token: credentialResponse.credential,
       });
-      const user = res.data.user || { username: "Google User" };
-      handleSuccess(user.username);
+      if (res.data.token) {
+        handleSuccess(res.data.user, res.data.token);
+      }
     } catch (err) {
       setError("Google Login failed.", err);
     }

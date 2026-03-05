@@ -3,7 +3,14 @@ import ReactPlayer from "react-player";
 import screenfull from "screenfull";
 import { FaVolumeUp, FaVolumeMute, FaExpand } from "react-icons/fa";
 
-const GuestControls = ({ volume, muted, onVolumeChange, onToggleMute, onToggleFullscreen, playing }) => (
+const GuestControls = ({
+  volume,
+  muted,
+  onVolumeChange,
+  onToggleMute,
+  onToggleFullscreen,
+  playing,
+}) => (
   <div className="custom-controls">
     <div className="controls-text">
       {playing ? "▶ Now Playing" : "⏸ Paused by Host"}
@@ -13,7 +20,9 @@ const GuestControls = ({ volume, muted, onVolumeChange, onToggleMute, onToggleFu
     </button>
     <input
       type="range"
-      min={0} max={1} step="0.1"
+      min={0}
+      max={1}
+      step="0.1"
       value={muted ? 0 : volume}
       onChange={onVolumeChange}
       className="volume-slider"
@@ -48,17 +57,26 @@ const VideoPlayer = forwardRef(
       setMuted(newVol === 0);
     };
     const handleToggleMute = () => {
-      if (muted) { setVolume(0.8); setMuted(false); } 
-      else { setMuted(true); }
+      if (muted) {
+        setVolume(0.8);
+        setMuted(false);
+      } else {
+        setMuted(true);
+      }
     };
     const getCurrentTime = () => {
-      if (ref && ref.current && typeof ref.current.getCurrentTime === "function")
+      if (
+        ref &&
+        ref.current &&
+        typeof ref.current.getCurrentTime === "function"
+      )
         return ref.current.getCurrentTime();
       return 0;
     };
     const playerConfig = {
       youtube: {
         playerVars: {
+          autoplay: 1, // 🚨 Essential for URL changes
           controls: isHost ? 1 : 0,
           disablekb: isHost ? 0 : 1,
           modestbranding: 1,
@@ -74,10 +92,11 @@ const VideoPlayer = forwardRef(
         {!isHost && <div className="blocker-overlay" />}
 
         <ReactPlayer
-          key={isHost ? "host-player" : "guest-player"}
+          key={`${isHost ? "host" : "guest"}-${url}`}
           ref={ref}
           url={url}
-          width="100%" height="100%"
+          width="100%"
+          height="100%"
           controls={isHost}
           playing={playing}
           muted={muted}
@@ -86,9 +105,17 @@ const VideoPlayer = forwardRef(
           onReady={() => {
             if (lastProgressRef.current > 1) {
               isRestoring.current = true;
-              if (ref.current) ref.current.seekTo(lastProgressRef.current, "seconds");
+              if (ref.current)
+                ref.current.seekTo(lastProgressRef.current, "seconds");
             }
             if (onReady) onReady();
+          }}
+          onBufferEnd={() => {
+            if (playing && ref.current) {
+              const internalPlayer = ref.current.getInternalPlayer();
+              if (internalPlayer && internalPlayer.playVideo)
+                internalPlayer.playVideo();
+            }
           }}
           onProgress={(state) => {
             const current = state.playedSeconds;
@@ -99,10 +126,17 @@ const VideoPlayer = forwardRef(
             if (isRestoring.current && diff < 1) isRestoring.current = false;
             lastProgressRef.current = current;
           }}
-          onPlay={() => { if (onPlay) onPlay(getCurrentTime()); }}
-          onPause={() => { if (onPause) onPause(getCurrentTime()); }}
+          onPlay={() => {
+            if (onPlay) onPlay(getCurrentTime());
+          }}
+          onPause={() => {
+            if (onPause) onPause(getCurrentTime());
+          }}
           onSeek={(seconds) => {
-            if (isRestoring.current) { isRestoring.current = false; return; }
+            if (isRestoring.current) {
+              isRestoring.current = false;
+              return;
+            }
             lastProgressRef.current = seconds;
             if (onSeek) onSeek(seconds);
           }}
@@ -120,7 +154,7 @@ const VideoPlayer = forwardRef(
         )}
       </div>
     );
-  }
+  },
 );
 
 export default VideoPlayer;
