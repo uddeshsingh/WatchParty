@@ -32,8 +32,8 @@ def test_register_user_actual_db():
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == unique_username
-    assert "id" in data
+    assert data["user"]["username"] == unique_username
+    assert "id" in data["user"]
 
 def test_add_and_fetch_video_actual_db():
     room_name = "test_integration_room"
