@@ -1,0 +1,24 @@
+---
+description: Coding standards and architecture guidelines for the React + Vite frontend.
+globs: frontend/wpfe/**/*.{js,jsx,ts,tsx,css}
+---
+# React + Vite Frontend Guidelines
+
+## Context
+- This is a React SPA built with Vite.
+- Styling is handled via standard CSS/Tailwind (adjust if you added Tailwind).
+- State management relies heavily on React Hooks (`useState`, `useRef`, `useEffect`).
+
+## Coding Standards
+- Use functional components and modern React Hooks.
+- Prefer `useRef` over `useState` for mutable values that do not require a re-render (e.g., WebSocket instances, player instances).
+- Extract complex WebSocket logic into custom hooks (like `useWatchParty`).
+- Always clean up intervals, timeouts, and WebSocket connections in the `useEffect` return function to prevent memory leaks.
+
+## API & WebSocket Communication
+- Use `axios` for standard HTTP REST calls to the Python FastAPI backend.
+- Use native browser `WebSocket` for real-time communication with the Go backend.
+- Always implement a heartbeat/ping mechanism for long-lived WebSocket connections to prevent Cloud Run idle timeouts.
+
+## Error Handling
+- Do not blindly crash the UI on WebSocket drops. Catch `onclose` events and map them to user-friendly messages (e.g., "Connection lost. Please reconnect.").

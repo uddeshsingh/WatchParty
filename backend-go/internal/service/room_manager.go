@@ -245,25 +245,24 @@ func (s *RoomService) LeaveRoom(ctx context.Context, roomID string, client *doma
 					break
 				}
 			}
+
 			if !hasHost {
-				if !hasHost {
-					var oldestUser string
-					var oldestTime time.Time
-					first := true
+				var oldestUser string
+				var oldestTime time.Time
+				first := true
 
-					for id, u := range state.Clients {
-						if first || u.JoinedAt.Before(oldestTime) {
-							oldestTime = u.JoinedAt
-							oldestUser = id
-							first = false
-						}
+				for id, u := range state.Clients {
+					if first || u.JoinedAt.Before(oldestTime) {
+						oldestTime = u.JoinedAt
+						oldestUser = id
+						first = false
 					}
+				}
 
-					if oldestUser != "" {
-						u := state.Clients[oldestUser]
-						u.IsHost = true
-						state.Clients[oldestUser] = u
-					}
+				if oldestUser != "" {
+					u := state.Clients[oldestUser]
+					u.IsHost = true
+					state.Clients[oldestUser] = u
 				}
 			}
 

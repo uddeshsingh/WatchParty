@@ -12,6 +12,9 @@ class VideoRepository(ABC):
     @abstractmethod
     def delete_videos_by_room(self, room: str) -> None: pass
 
+    @abstractmethod
+    def get_video_by_url(self, url: str) -> VideoResponse | None: pass
+
 class VideoManager(ABC):
     @abstractmethod
     def process_and_add_video(self, req: VideoCreateReq) -> VideoResponse: pass

@@ -1,0 +1,25 @@
+---
+description: Guidelines for the Python FastAPI backend, database, and background workers.
+globs: backend-python/**/*.py
+---
+# Python FastAPI Backend Guidelines
+
+## Context
+- This service handles standard CRUD operations, Google OAuth, Postgres Database state, and web scraping.
+- It communicates asynchronously with the Go backend via GCP Pub/Sub.
+
+## Coding Standards
+- Use Python 3.12+ features and strict type hinting (`-> dict`, `-> VideoResponse`).
+- Use the **Service-Repository Pattern**: 
+  - `routers` handle HTTP requests and depend on `services`.
+  - `services` handle business logic and depend on `repositories`.
+  - `repositories` handle raw SQLAlchemy database queries.
+
+## FastAPI & SQLAlchemy
+- Never put database querying logic directly inside FastAPI route definitions.
+- Always use `yield` for database dependencies (`get_db`) to ensure connections are closed cleanly.
+- Use Pydantic models for all API request/response validation and Pub/Sub message schemas.
+
+## Web Scraping & External Calls
+- Always wrap external HTTP requests (like `requests.get` or BeautifulSoup) in `try/except` blocks with strict timeouts (e.g., `timeout=3`).
+- Always check the database cache (`get_video_by_url`) before executing an outbound scrape.

@@ -34,7 +34,7 @@ const AddVideoBar = ({ room, onVideoAdded }) => {
       setResults([]);
       if (onVideoAdded) onVideoAdded();
     } catch (err) {
-      alert("Failed to add video.");
+      alert("Failed to add video.", err);
     } finally {
       setLoading(false);
     }
