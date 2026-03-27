@@ -124,7 +124,13 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set Image Names
+        run: |
+          echo "PYTHON_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/watchparty-api:latest" >> $GITHUB_ENV
+          echo "GO_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/watchparty-ws:latest" >> $GITHUB_ENV
 
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: PYTHON API
@@ -132,9 +138,8 @@ jobs:
       - name: Build and Push Python Image
         run: |
           cd backend-python
-          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker build -t ${{ env.PYTHON_IMAGE }} .
+          docker push ${{ env.PYTHON_IMAGE }}
 
       - name: Deploy Python to Cloud Run
         id: deploy-python
@@ -142,7 +147,7 @@ jobs:
         with:
           service: watchparty-api
           region: us-central1
-          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest
+          image: ${{ env.PYTHON_IMAGE }}
           flags: |
             --add-cloudsql-instances=watchparty-482106:us-central1:watchparty-db
             --port=8080
@@ -158,9 +163,8 @@ jobs:
       - name: Build and Push Go Image
         run: |
           cd backend-go
-          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker build -t ${{ env.GO_IMAGE }} .
+          docker push ${{ env.GO_IMAGE }}
 
       - name: Deploy Go to Cloud Run
         id: deploy-go
@@ -168,7 +172,7 @@ jobs:
         with:
           service: watchparty-ws
           region: us-central1
-          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest
+          image: ${{ env.GO_IMAGE }}
           env_vars: |
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
