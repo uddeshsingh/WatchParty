@@ -16,7 +16,12 @@ describe('WatchParty Full System Integration', () => {
   it('completes the full flow: login -> create room -> add video', async () => {
     
     // Fake the network
-    axios.post.mockResolvedValue({ data: { user: { username: 'uddesh_test' } } });
+    axios.post.mockResolvedValue({ 
+      data: { 
+        user: { username: 'uddesh_test' },
+        token: 'fake-jwt-token'
+      } 
+    });
     axios.get.mockImplementation((url) => {
       if (url.includes('/videos')) {
         return Promise.resolve({ data: [{ id: 1, title: 'Rick Astley' }] });
@@ -47,7 +52,7 @@ describe('WatchParty Full System Integration', () => {
     fireEvent.click(createBtn);
 
     // 3. Dashboard Phase
-    const videoInput = await screen.findByPlaceholderText(/paste youtube url/i);
+    const videoInput = await screen.findByPlaceholderText(/search youtube or paste url/i);
     const addBtn = screen.getByRole('button', { name: /add video/i }); 
 
     fireEvent.change(videoInput, { target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } });

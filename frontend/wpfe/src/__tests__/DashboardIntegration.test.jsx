@@ -15,7 +15,12 @@ describe('WatchParty UI Integration', () => {
 
   it('updates the playlist automatically when a video is added', async () => {
     // Fake the Login network call
-    axios.post.mockResolvedValue({ data: { user: { username: 'Tester' } } });
+    axios.post.mockResolvedValue({ 
+      data: { 
+        user: { username: 'Tester' },
+        token: 'fake-jwt-token' 
+      } 
+    });
 
     // Fake the Room and Video fetching
     axios.get.mockImplementation((url) => {
@@ -42,7 +47,7 @@ describe('WatchParty UI Integration', () => {
     fireEvent.click(screen.getByRole('button', { name: /create/i }));
 
     // 3. Add a video
-    const input = await screen.findByPlaceholderText(/paste youtube url/i);
+    const input = await screen.findByPlaceholderText(/search youtube or paste url/i);
     fireEvent.change(input, { target: { value: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } });
     fireEvent.click(screen.getByRole('button', { name: /add video/i }));
 

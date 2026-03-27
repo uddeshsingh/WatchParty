@@ -1,21 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 import uuid
 
-# Import your actual app and DB dependencies
+# Import your app and test DB session from conftest
 from app.main import app
-from app.repository.database import Base
+from .conftest import TestingSessionLocal
 from app.repository.models import UserModel, VideoModel
-
-# Point to your ACTUAL local postgres
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/watchparty"
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Recreate tables to ensure clean state
-Base.metadata.create_all(bind=engine)
 
 client = TestClient(app)
 
