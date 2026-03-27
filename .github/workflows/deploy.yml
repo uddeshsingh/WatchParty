@@ -145,6 +145,11 @@ jobs:
       - name: Configure Docker
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
+      - name: Set Lowercase Repository Name
+        id: lowercase
+        run: |
+          echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: PYTHON API
@@ -152,8 +157,8 @@ jobs:
       - name: Build and Push Python Image
         run: |
           cd backend-python
-          docker build -t ghcr.io/${{ github.repository }}/watchparty-api:latest .
-          docker push ghcr.io/${{ github.repository }}/watchparty-api:latest
+          docker build -t ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest .
+          docker push ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest
 
       - name: Deploy Python to Cloud Run
         id: deploy-python
@@ -161,7 +166,7 @@ jobs:
         with:
           service: watchparty-api
           region: us-central1
-          image: ghcr.io/${{ github.repository }}/watchparty-api:latest
+          image: ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest
           flags: |
             --port=8080
           env_vars: |
@@ -176,8 +181,8 @@ jobs:
       - name: Build and Push Go Image
         run: |
           cd backend-go
-          docker build -t ghcr.io/${{ github.repository }}/watchparty-ws:latest .
-          docker push ghcr.io/${{ github.repository }}/watchparty-ws:latest
+          docker build -t ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest .
+          docker push ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest
 
       - name: Deploy Go to Cloud Run
         id: deploy-go
@@ -185,7 +190,7 @@ jobs:
         with:
           service: watchparty-ws
           region: us-central1
-          image: ghcr.io/${{ github.repository }}/watchparty-ws:latest
+          image: ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest
           flags: |
             --timeout=3600
           env_vars: |
