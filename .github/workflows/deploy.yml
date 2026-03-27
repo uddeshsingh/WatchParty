@@ -126,9 +126,6 @@ jobs:
     needs: infrastructure-check
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
     outputs:
       python_url: ${{ steps.deploy-python.outputs.url }}
       go_url: ${{ steps.deploy-go.outputs.url }}
@@ -142,23 +139,19 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker
+      # Authenticate Docker to push to Google Artifact Registry
+      - name: Configure Docker for Artifact Registry
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          gcloud auth configure-docker us-central1-docker.pkg.dev
       
-      - name: Set Lowercase Repository Name
-        id: lowercase
-        run: |
-          echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: PYTHON API
       # ---------------------------------------------------
       - name: Build and Push Python Image
         run: |
           cd backend-python
-          docker build -t ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest .
-          docker push ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest
+          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest .
+          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest
 
       - name: Deploy Python to Cloud Run
         id: deploy-python
@@ -166,7 +159,7 @@ jobs:
         with:
           service: watchparty-api
           region: us-central1
-          image: ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-api:latest
+          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest
           flags: |
             --port=8080
           env_vars: |
@@ -181,8 +174,8 @@ jobs:
       - name: Build and Push Go Image
         run: |
           cd backend-go
-          docker build -t ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest .
-          docker push ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest
+          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest .
+          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest
 
       - name: Deploy Go to Cloud Run
         id: deploy-go
@@ -190,7 +183,7 @@ jobs:
         with:
           service: watchparty-ws
           region: us-central1
-          image: ghcr.io/${{ steps.lowercase.outputs.repo }}/watchparty-ws:latest
+          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest
           flags: |
             --timeout=3600
           env_vars: |
