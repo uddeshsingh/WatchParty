@@ -13,10 +13,13 @@ import (
 )
 
 func TestRoomService_LiveIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	ctx := context.Background()
 
 	// 1. Connect to actual local Redis
-	repo, err := repository.NewRedisRepo("localhost:6379")
+	repo, err := repository.NewRedisRepo("redis://localhost:6379")
 	require.NoError(t, err)
 
 	// 2. Connect to actual GCP Pub/Sub

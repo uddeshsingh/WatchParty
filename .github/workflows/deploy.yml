@@ -3,13 +3,101 @@ name: Deploy WatchParty Stack
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   # ----------------------------------------------------------------
-  # JOB 1: INFRASTRUCTURE SANITY CHECK
+  # JOB 1: TEST GO BACKEND
+  # ----------------------------------------------------------------
+  test-go:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend-go/go.sum
+
+      - name: Start Pub/Sub Emulator
+        run: |
+          docker run -d -p 8085:8085 gcr.io/google.com/cloudsdktool/cloud-sdk:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+          sleep 5 # Give it a few seconds to boot up
+
+      - name: Run Go Tests
+        env:
+          PUBSUB_EMULATOR_HOST: localhost:8085
+          GCP_PROJECT_ID: test-project
+        run: |
+          cd backend-go
+          go mod tidy
+          go test -v ./...
+
+  # ----------------------------------------------------------------
+  # JOB 2: TEST PYTHON BACKEND
+  # ----------------------------------------------------------------
+  test-python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: watchparty
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+     
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend-python/requirements.txt
+      
+      - name: Start Pub/Sub Emulator
+        run: |
+          docker run -d -p 8085:8085 gcr.io/google.com/cloudsdktool/cloud-sdk:emulators gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+          sleep 5
+
+      - name: Install dependencies
+        run: |
+          cd backend-python
+          pip install -r requirements.txt
+          pip install pytest pytest-mock responses
+
+      - name: Run Python Tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/watchparty
+          PYTHONPATH: .
+          PUBSUB_EMULATOR_HOST: localhost:8085
+          GCP_PROJECT_ID: test-project
+        run: |
+          cd backend-python
+          pytest tests -v
+
+  # ----------------------------------------------------------------
+  # JOB 3: INFRASTRUCTURE SANITY CHECK
   # ----------------------------------------------------------------
   infrastructure-check:
+    needs: [test-go, test-python]
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -32,11 +120,15 @@ jobs:
           echo "✅ Infrastructure verified."
 
   # ----------------------------------------------------------------
-  # JOB 2: DEPLOY BACKENDS (Requires Infra Check)
+  # JOB 4: DEPLOY BACKENDS (Requires Tests & Infra Check)
   # ----------------------------------------------------------------
   deploy-backends:
     needs: infrastructure-check
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     outputs:
       python_url: ${{ steps.deploy-python.outputs.url }}
       go_url: ${{ steps.deploy-go.outputs.url }}
@@ -50,9 +142,9 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # 🚨 Authorize Docker to push to your new Artifact Registry
       - name: Configure Docker
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: PYTHON API
@@ -60,9 +152,8 @@ jobs:
       - name: Build and Push Python Image
         run: |
           cd backend-python
-          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker build -t ghcr.io/${{ github.repository }}/watchparty-api:latest .
+          docker push ghcr.io/${{ github.repository }}/watchparty-api:latest
 
       - name: Deploy Python to Cloud Run
         id: deploy-python
@@ -70,10 +161,8 @@ jobs:
         with:
           service: watchparty-api
           region: us-central1
-          # 🚨 Deploy the pre-built image instead of building from source
-          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-api:latest
+          image: ghcr.io/${{ github.repository }}/watchparty-api:latest
           flags: |
-            --add-cloudsql-instances=watchparty-482106:us-central1:watchparty-db
             --port=8080
           env_vars: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
@@ -87,9 +176,8 @@ jobs:
       - name: Build and Push Go Image
         run: |
           cd backend-go
-          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest"
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker build -t ghcr.io/${{ github.repository }}/watchparty-ws:latest .
+          docker push ghcr.io/${{ github.repository }}/watchparty-ws:latest
 
       - name: Deploy Go to Cloud Run
         id: deploy-go
@@ -97,19 +185,21 @@ jobs:
         with:
           service: watchparty-ws
           region: us-central1
-          # 🚨 Deploy the pre-built image
-          image: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/watchparty-repo/watchparty-ws:latest
+          image: ghcr.io/${{ github.repository }}/watchparty-ws:latest
+          flags: |
+            --timeout=3600
           env_vars: |
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
 
   # ----------------------------------------------------------------
-  # JOB 3: DEPLOY FRONTEND
+  # JOB 5: DEPLOY FRONTEND
   # ----------------------------------------------------------------
   deploy-frontend:
     needs: deploy-backends
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: Build React

@@ -23,9 +23,9 @@ func NewRedisRepo(addr string) (*RedisRepo, error) {
 		return nil, fmt.Errorf("failed to parse upstash url: %v", err)
 	}
 
-	// Explicitly set TLS for Upstash compatibility
-	opt.TLSConfig = &tls.Config{
-		MinVersion: tls.VersionTLS12,
+	// Explicitly set TLS for Upstash compatibility if using rediss://
+	if opt.TLSConfig != nil {
+		opt.TLSConfig.MinVersion = tls.VersionTLS12
 	}
 
 	client := redis.NewClient(opt)

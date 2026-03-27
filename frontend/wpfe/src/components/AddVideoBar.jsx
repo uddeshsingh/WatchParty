@@ -50,7 +50,7 @@ const AddVideoBar = ({ room, onVideoAdded }) => {
           onChange={(e) => setQuery(e.target.value)}
           className="add-video-input"
         />
-        <button type="submit" disabled={loading} className="add-video-btn">
+        <button type="submit" disabled={loading} className="add-video-btn" aria-label="Add Video">
           {loading ? "..." : (query.includes("http") ? <FaPlus /> : <FaSearch />)}
         </button>
       </form>

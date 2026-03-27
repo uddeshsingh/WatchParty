@@ -3,6 +3,7 @@ from app.service.video_service import VideoService
 from app.repository.video_repo import VideoRepoImpl
 from app.pubsub.gcp_publisher import GCPPubSubPublisher
 from app.repository.database import SessionLocal, engine, Base
+from app.repository.models import VideoModel
 from app.domain.schemas import VideoCreateReq
 
 def test_full_video_pipeline():
