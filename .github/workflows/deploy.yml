@@ -110,6 +110,9 @@ jobs:
     needs: infrastructure-check
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     outputs:
       python_url: ${{ steps.deploy-python.outputs.url }}
       go_url: ${{ steps.deploy-go.outputs.url }}
@@ -127,19 +130,14 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Set Image Names
-        run: |
-          echo "PYTHON_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/watchparty-api:latest" >> $GITHUB_ENV
-          echo "GO_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/watchparty-ws:latest" >> $GITHUB_ENV
-
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: PYTHON API
       # ---------------------------------------------------
       - name: Build and Push Python Image
         run: |
           cd backend-python
-          docker build -t ${{ env.PYTHON_IMAGE }} .
-          docker push ${{ env.PYTHON_IMAGE }}
+          docker build -t ghcr.io/${{ github.repository }}/watchparty-api:latest .
+          docker push ghcr.io/${{ github.repository }}/watchparty-api:latest
 
       - name: Deploy Python to Cloud Run
         id: deploy-python
@@ -147,9 +145,8 @@ jobs:
         with:
           service: watchparty-api
           region: us-central1
-          image: ${{ env.PYTHON_IMAGE }}
+          image: ghcr.io/${{ github.repository }}/watchparty-api:latest
           flags: |
-            --add-cloudsql-instances=watchparty-482106:us-central1:watchparty-db
             --port=8080
           env_vars: |
             DATABASE_URL=${{ secrets.DATABASE_URL }}
@@ -163,8 +160,8 @@ jobs:
       - name: Build and Push Go Image
         run: |
           cd backend-go
-          docker build -t ${{ env.GO_IMAGE }} .
-          docker push ${{ env.GO_IMAGE }}
+          docker build -t ghcr.io/${{ github.repository }}/watchparty-ws:latest .
+          docker push ghcr.io/${{ github.repository }}/watchparty-ws:latest
 
       - name: Deploy Go to Cloud Run
         id: deploy-go
@@ -172,7 +169,9 @@ jobs:
         with:
           service: watchparty-ws
           region: us-central1
-          image: ${{ env.GO_IMAGE }}
+          image: ghcr.io/${{ github.repository }}/watchparty-ws:latest
+          flags: |
+            --timeout=3600
           env_vars: |
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
