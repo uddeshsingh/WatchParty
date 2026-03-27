@@ -1,13 +1,23 @@
+from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
+import os
+
+# 1. SET ENVIRONMENT VARIABLES BEFORE ANY APP IMPORTS
+os.environ["PUBSUB_EMULATOR_HOST"] = "localhost:8085"
+os.environ["GCP_PROJECT_ID"] = "test-project"
+os.environ["JWT_SECRET"] = "supersecret_test_key_that_is_at_least_32_characters_long"
+
+# Ensure we have a default DATABASE_URL if none is set
+if not os.getenv("DATABASE_URL"):
+    os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/watchparty"
 
 from app.main import app
 from app.api.routes import get_db
 from app.repository.database import Base
 
-# 🚨 FIX: Use StaticPool to ensure all threads share the exact same in-memory database
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 test_engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 
@@ -22,7 +32,36 @@ def setup_database():
     yield
     Base.metadata.drop_all(bind=test_engine)
 
+@pytest.fixture(autouse=True)
+def mock_external_io(monkeypatch):
+    """
+    Automatically applied to ALL tests. 
+    Prevents GitHub Actions from being rate-limited by YouTube.
+    """
+    # Mock the scraper
+    def fake_fetch_metadata(url):
+        return {"title": "Mocked CI Video", "thumbnail": "https://via.placeholder.com/150"}
+    
+    monkeypatch.setattr("app.service.video_service.fetch_video_metadata", fake_fetch_metadata)
+
+    # Optional: Mock the publisher to avoid Pub/Sub connectivity issues in unit tests
+    # Note: Integration tests can still use patch or manually override this if they want real Pub/Sub logic
+    mock_pub = MagicMock()
+    monkeypatch.setattr("app.pubsub.gcp_publisher.GCPPubSubPublisher", lambda *args, **kwargs: mock_pub)
+
+
 def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@pytest.fixture
+def db_session():
+    """
+    Returns a fresh database session for SQLite memory DB.
+    """
     db = TestingSessionLocal()
     try:
         yield db

@@ -2,9 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 import uuid
 
-# Import your app and test DB session from conftest
+# Import your app from main
 from app.main import app
-from .conftest import TestingSessionLocal
 from app.repository.models import UserModel, VideoModel
 
 client = TestClient(app)
@@ -25,7 +24,7 @@ def test_register_user_actual_db():
     assert data["user"]["username"] == unique_username
     assert "id" in data["user"]
 
-def test_add_and_fetch_video_actual_db():
+def test_add_and_fetch_video_actual_db(db_session):
     room_name = "test_integration_room"
     
     # 1. Add a video (This will trigger yt-dlp and actual GCP PubSub if credentials exist)
@@ -48,7 +47,7 @@ def test_add_and_fetch_video_actual_db():
     assert any(v["id"] == added_video["id"] for v in videos)
 
     # Cleanup the actual database to prevent bloat
-    db = TestingSessionLocal()
+    db = db_session
     db.query(VideoModel).filter(VideoModel.room == room_name).delete()
     db.commit()
     db.close()
