@@ -139,8 +139,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
-      python_url: ${{ steps.deploy-python.outputs.url }}
-      go_url: ${{ steps.deploy-go.outputs.url }}
+      python_url: ${{ steps.resolve-python-api-url.outputs.url }}
+      go_url: ${{ steps.resolve-ws-url.outputs.url }}
     steps:
       - uses: actions/checkout@v4
       
@@ -181,6 +181,19 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
 
+      - name: Resolve Python API URL (gcloud)
+        id: resolve-python-api-url
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe watchparty-api \
+            --region=us-central1 \
+            --project="${GCP_PROJECT_ID}" \
+            --format='value(status.url)')
+          echo "Resolved watchparty-api URL: ${URL}"
+          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: GO WEBSOCKET
       # ---------------------------------------------------
@@ -205,6 +218,19 @@ jobs:
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
 
+      - name: Resolve WebSocket service URL (gcloud)
+        id: resolve-ws-url
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe watchparty-ws \
+            --region=us-central1 \
+            --project="${GCP_PROJECT_ID}" \
+            --format='value(status.url)')
+          echo "Resolved watchparty-ws URL: ${URL}"
+          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+
   # ----------------------------------------------------------------
   # JOB 6: DEPLOY FRONTEND
   # ----------------------------------------------------------------
@@ -215,10 +241,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build React
+        env:
+          PYTHON_URL: ${{ needs.deploy-backends.outputs.python_url }}
+          GO_URL: ${{ needs.deploy-backends.outputs.go_url }}
+          VITE_API_URL_OVERRIDE: ${{ secrets.VITE_API_URL }}
+          VITE_WS_URL_OVERRIDE: ${{ secrets.VITE_WS_URL }}
         run: |
           cd frontend/wpfe
-          echo "VITE_API_URL=${{ needs.deploy-backends.outputs.python_url }}" > .env
-          echo "VITE_WS_URL=${{ needs.deploy-backends.outputs.go_url }}" | sed 's/https/wss/' >> .env
+          # Defaults: URLs from gcloud run services describe (job outputs). Optional secrets override (e.g. custom domain).
+          if [ -n "$VITE_API_URL_OVERRIDE" ]; then
+            API_URL="$VITE_API_URL_OVERRIDE"
+            echo "VITE_API_URL: using VITE_API_URL secret override"
+          else
+            API_URL="$PYTHON_URL"
+            echo "VITE_API_URL: using gcloud-resolved watchparty-api URL"
+          fi
+          if [ -n "$VITE_WS_URL_OVERRIDE" ]; then
+            WS_URL="$VITE_WS_URL_OVERRIDE"
+            echo "VITE_WS_URL: using VITE_WS_URL secret override"
+          else
+            WS_URL=$(echo "$GO_URL" | sed 's/^https/wss/')
+            echo "VITE_WS_URL: using gcloud-resolved watchparty-ws URL (https→wss)"
+          fi
+          echo "VITE_API_URL=$API_URL" > .env
+          echo "VITE_WS_URL=$WS_URL" >> .env
           echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
           npm install && npm run build
       

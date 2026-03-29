@@ -109,7 +109,7 @@
 | Hook/Service | Purpose | Inputs/Props | State/Outputs |
 | :--- | :--- | :--- | :--- |
 | `useWatchParty` | Core WS connection & Room Sync | `urlRoom` (string\|null), `action` (`"join"`\|`"create"`) | `room`, `username`, `isHost`, `userList`, `myID`, `messages`, `videos`, `currentVideo`, `playing`, `playerRef`, `typingUsers`, `lastReaction`, `error`, `setCurrentVideo`, `sendReaction`, `setUsername`, `onReady`, `onPlay`, `onPause`, `onSeek`, `sendMessage`, `toggleHost`, `sendNotification`, `changeVideo`, `sendTypingSignal`, `setRoom`, `onEnded`, `refreshPlaylist` |
-| `Config.js` | Environment configuration | None | `API_URL` (Python backend), `WS_URL` (Go backend). Dev: auto-detects `hostname:8000` / `hostname:8080`. Prod: reads `VITE_API_URL`, `VITE_WS_URL`. |
+| `Config.js` | Environment configuration | None | `API_URL` (Python backend), `WS_URL` (Go backend). Dev: auto-detects `hostname:8000` / `hostname:8080`. Prod: reads `VITE_API_URL`, `VITE_WS_URL` baked at CI build. GitHub Actions `deploy-backends` sets job outputs from `gcloud run services describe … --format='value(status.url)'` for `watchparty-api` and `watchparty-ws`; `deploy-frontend` uses those for `.env`. Optional repo secrets `VITE_API_URL` / `VITE_WS_URL` override (e.g. mapped custom domains). |
 
 ### UI Component Tree
 | Component | Purpose | Core Responsibilities |

@@ -13,11 +13,16 @@ import (
 // (default http://localhost:5173 when unset).
 func AllowedOrigins() (allowAny bool, origins []string) {
 	const defaultOrigin = "http://localhost:5173"
-	raw := os.Getenv("ALLOWED_ORIGINS")
+	raw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	onCloudRun := os.Getenv("K_SERVICE") != ""
+
 	if raw == "" {
+		if onCloudRun {
+			return true, nil
+		}
 		return false, []string{defaultOrigin}
 	}
-	if strings.TrimSpace(raw) == "*" {
+	if raw == "*" {
 		return true, nil
 	}
 	parts := strings.Split(raw, ",")
@@ -29,7 +34,10 @@ func AllowedOrigins() (allowAny bool, origins []string) {
 		}
 	}
 	if len(out) == 0 {
-		out = []string{defaultOrigin}
+		if onCloudRun {
+			return true, nil
+		}
+		return false, []string{defaultOrigin}
 	}
 	return false, out
 }
