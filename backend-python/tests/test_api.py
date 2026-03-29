@@ -1,12 +1,19 @@
-import pytest
-from fastapi.testclient import TestClient
 import uuid
 
+import pytest
+from fastapi.testclient import TestClient
+
 # Import your app from main
+from app.api.auth import create_token
 from app.main import app
 from app.repository.models import UserModel, VideoModel
 
 client = TestClient(app)
+
+
+def _integration_auth_headers() -> dict:
+    token = create_token("integration_test_user")
+    return {"Authorization": f"Bearer {token}"}
 
 def test_register_user_actual_db():
     unique_username = f"testuser_{uuid.uuid4().hex[:6]}"
@@ -26,21 +33,23 @@ def test_register_user_actual_db():
 
 def test_add_and_fetch_video_actual_db(db_session):
     room_name = "test_integration_room"
-    
-    # 1. Add a video (This will trigger yt-dlp and actual GCP PubSub if credentials exist)
+    headers = _integration_auth_headers()
+
+    # 1. Add a video (metadata/pubsub may be mocked by conftest)
     response = client.post(
         "/api/videos/add",
         json={
             "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "room": room_name
-        }
+            "room": room_name,
+        },
+        headers=headers,
     )
     assert response.status_code == 200
     added_video = response.json()
     assert added_video["video_url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    
+
     # 2. Fetch it back
-    res_get = client.get(f"/api/videos?room={room_name}")
+    res_get = client.get(f"/api/videos?room={room_name}", headers=headers)
     assert res_get.status_code == 200
     videos = res_get.json()
     assert len(videos) > 0
