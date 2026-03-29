@@ -44,23 +44,31 @@ const Dashboard = ({ user, onLogout }) => {
     changeVideo,
     sendTypingSignal,
     typingUsers,
-    onEnded
+    onEnded,
+    refreshPlaylist,
   } = useWatchParty(roomId, action);
 
   useEffect(() => {
-    if (error && !hasAlerted.current) {
-      hasAlerted.current = true;
+    hasAlerted.current = false;
+  }, [room]);
 
-      let alertMsg = error;
-      if (error === "room_exists") alertMsg = "Room name taken!";
-      else if (error === "room_not_found_silent")
-        alertMsg = "Room does not exist!";
-      else if (error === "connection_lost")
-        alertMsg = "Connection lost. Please rejoin.";
-
-      alert(alertMsg);
-      navigate("/");
+  useEffect(() => {
+    if (!error) {
+      hasAlerted.current = false;
+      return;
     }
+    if (hasAlerted.current) return;
+    hasAlerted.current = true;
+
+    let alertMsg = error;
+    if (error === "room_exists") alertMsg = "Room name taken!";
+    else if (error === "room_not_found_silent")
+      alertMsg = "Room does not exist!";
+    else if (error === "connection_lost")
+      alertMsg = "Connection lost. Please rejoin.";
+
+    alert(alertMsg);
+    navigate("/");
   }, [error, navigate]);
 
   const copyLink = () => {
@@ -120,76 +128,78 @@ const Dashboard = ({ user, onLogout }) => {
         </div>
       </nav>
 
-      <main className="main-content">
-        <section className="video-stage">
-          <div className="player-container">
-            <ReactionOverlay lastReaction={lastReaction} />
-            {currentVideo ? (
-              <VideoPlayer
-                ref={playerRef}
-                url={currentVideo.video_url}
-                playing={playing}
-                isHost={isHost}
-                onReady={onReady}
-                onPlay={onPlay}
-                onPause={onPause}
-                onSeek={onSeek}
-                onEnded={onEnded}
-              />
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  color: "#666",
-                }}
-              >
-                <FaFilm
-                  size={50}
-                  style={{ marginBottom: "15px", opacity: 0.5 }}
+      {room ? (
+        <main className="main-content">
+          <section className="video-stage">
+            <div className="player-container">
+              <ReactionOverlay lastReaction={lastReaction} />
+              {currentVideo ? (
+                <VideoPlayer
+                  ref={playerRef}
+                  url={currentVideo.video_url}
+                  playing={playing}
+                  isHost={isHost}
+                  onReady={onReady}
+                  onPlay={onPlay}
+                  onPause={onPause}
+                  onSeek={onSeek}
+                  onEnded={onEnded}
                 />
-                <h2>No video selected</h2>
-                <p>Paste a YouTube link in the sidebar to start the party!</p>
-              </div>
-            )}
-          </div>
-        </section>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    color: "#666",
+                  }}
+                >
+                  <FaFilm
+                    size={50}
+                    style={{ marginBottom: "15px", opacity: 0.5 }}
+                  />
+                  <h2>No video selected</h2>
+                  <p>Paste a YouTube link in the sidebar to start the party!</p>
+                </div>
+              )}
+            </div>
+          </section>
 
-        <aside className="sidebar">
-          <UserList
-            users={userList}
-            myID={myID}
-            isHost={isHost}
-            onToggleHost={toggleHost}
-          />
-          <AddVideoBar
-            room={room}
-            onVideoAdded={() => sendNotification("new_video")}
-          />
-          <VideoList
-            videos={videos}
-            isHost={isHost}
-            onDelete={async (videoId) => {
-              await axios.delete(
-                `${API_URL}/api/videos/${videoId}?room=${room}`,
-              );
-              sendNotification("playlist_updated");
-            }}
-            onSelect={(video) => {
-              if (isHost) changeVideo(video.id);
-              else alert("Only the host can change the video!");
-            }}
-          />
-          <ChatSidebar
-            messages={messages}
-            onSendMessage={sendMessage}
-            onTyping={sendTypingSignal}
-            typingUsers={typingUsers}
-            onSendReaction={sendReaction}
-          />
-        </aside>
-      </main>
+          <aside className="sidebar">
+            <UserList
+              users={userList}
+              myID={myID}
+              isHost={isHost}
+              onToggleHost={toggleHost}
+            />
+            <AddVideoBar
+              room={room}
+              onVideoAdded={() => sendNotification("new_video")}
+            />
+            <VideoList
+              videos={videos}
+              isHost={isHost}
+              onDelete={async (videoId) => {
+                await axios.delete(
+                  `${API_URL}/api/videos/${videoId}?room=${room}`,
+                );
+                refreshPlaylist();
+              }}
+              onSelect={(video) => {
+                if (isHost) changeVideo(video.id);
+                else alert("Only the host can change the video!");
+              }}
+            />
+            <ChatSidebar
+              messages={messages}
+              onSendMessage={sendMessage}
+              onTyping={sendTypingSignal}
+              typingUsers={typingUsers}
+              onSendReaction={sendReaction}
+            />
+          </aside>
+        </main>
+      ) : null}
     </div>
   );
 };

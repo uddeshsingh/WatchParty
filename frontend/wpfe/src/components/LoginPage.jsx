@@ -65,7 +65,14 @@ const LoginPage = ({ onLogin }) => {
         handleSuccess(res.data.user, res.data.token);
       }
     } catch (err) {
-      setError("Google Login failed.", err);
+      const detail = err.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail
+            ? JSON.stringify(detail)
+            : err.message || "Google Login failed.";
+      setError(msg);
     }
   };
 

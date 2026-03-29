@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaPlus, FaSearch } from "react-icons/fa";
-import { API_URL } from "../components/Config";
+import { API_URL } from "./Config";
 
 const AddVideoBar = ({ room, onVideoAdded }) => {
   const [query, setQuery] = useState("");
@@ -34,7 +34,12 @@ const AddVideoBar = ({ room, onVideoAdded }) => {
       setResults([]);
       if (onVideoAdded) onVideoAdded();
     } catch (err) {
-      alert("Failed to add video.", err);
+      const detail = err.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : err.message || "Failed to add video.";
+      alert(`Failed to add video: ${msg}`);
     } finally {
       setLoading(false);
     }

@@ -28,6 +28,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("watchparty_user");
+    localStorage.removeItem("watchparty_token");
     setUser(null);
   };
 

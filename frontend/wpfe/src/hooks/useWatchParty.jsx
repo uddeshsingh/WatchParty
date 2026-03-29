@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { API_URL, WS_URL } from "../components/Config";
+
+const isAbortError = (err) =>
+  err?.code === "ERR_CANCELED" || err?.name === "CanceledError";
 
 export const useWatchParty = (urlRoom = null, action = "join") => {
   const [room, setRoom] = useState(urlRoom);
@@ -55,6 +58,32 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const pendingSync = useRef(null);
   const remoteState = useRef(null);
 
+  /** AbortSignal for in-room playlist fetches tied to the active WS session */
+  const playlistAbortRef = useRef(null);
+
+  const refreshPlaylist = useCallback(() => {
+    if (!room) return;
+    axios
+      .get(`${API_URL}/api/videos/?room=${room}`)
+      .then((res) => {
+        setVideos(res.data);
+        setCurrentVideo((prev) => {
+          if (!prev) return res.data[0] ?? null;
+          const stillExists = res.data.some((v) => v.id === prev.id);
+          return stillExists ? prev : (res.data[0] ?? null);
+        });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        console.error("refreshPlaylist failed", err);
+      });
+  }, [room]);
+
+  const axiosPlaylistOpts = () => {
+    const signal = playlistAbortRef.current;
+    return signal ? { signal } : {};
+  };
+
   const playerSeekTo = (timestamp) => {
     if (playerRef.current && playerRef.current.seekTo) {
       playerRef.current.seekTo(timestamp, "seconds");
@@ -82,15 +111,14 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   };
 
   const changeVideo = (videoId) => {
-    if (ws.current && isHostRef.current) {
-      ws.current.send(
-        JSON.stringify({
-          type: "change_video",
-          username: usernameRef.current,
-          video_id: videoId,
-        }),
-      );
-    }
+    if (ws.current?.readyState !== WebSocket.OPEN || !isHostRef.current) return;
+    ws.current.send(
+      JSON.stringify({
+        type: "change_video",
+        username: usernameRef.current,
+        video_id: videoId,
+      }),
+    );
   };
 
   const sendTypingSignal = () => {
@@ -115,18 +143,26 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     }
 
     if (msg.type === "request_sync") {
-        if (isHostRef.current && playerRef.current) {
-            const currentTime = playerRef.current.getCurrentTime(); 
-            ws.current.send(JSON.stringify({
-                type: "sync_state",
-                username: usernameRef.current,
-                room: room,
-                timestamp: currentTime,
-                video_id: currentVideoRef.current ? currentVideoRef.current.id : 0,
-                content: playingRef.current ? "playing" : "paused" 
-            }));
-        }
-        return;
+      if (
+        isHostRef.current &&
+        playerRef.current &&
+        ws.current?.readyState === WebSocket.OPEN
+      ) {
+        const currentTime = playerRef.current.getCurrentTime();
+        ws.current.send(
+          JSON.stringify({
+            type: "sync_state",
+            username: usernameRef.current,
+            room: room,
+            timestamp: currentTime,
+            video_id: currentVideoRef.current
+              ? currentVideoRef.current.id
+              : 0,
+            content: playingRef.current ? "playing" : "paused",
+          }),
+        );
+      }
+      return;
     }
 
     console.log("📥 WS RECEIVE:", msg);
@@ -150,14 +186,13 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     if (msg.type === "sync_state") {
       let isChangingVideo = false;
 
-      // 1. Check if we need to load a new video
       if (
         msg.video_id &&
         (!currentVideoRef.current ||
           currentVideoRef.current.id !== msg.video_id)
       ) {
         isChangingVideo = true;
-        isReady.current = false; // 🚨 Immediately block the player
+        isReady.current = false;
 
         const syncedVideo = videosRef.current.find(
           (v) => v.id === msg.video_id,
@@ -165,11 +200,19 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         if (syncedVideo) {
           setCurrentVideo(syncedVideo);
         } else {
-          axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-            setVideos(res.data);
-            const found = res.data.find((v) => v.id === msg.video_id);
-            if (found) setCurrentVideo(found);
-          });
+          axios
+            .get(
+              `${API_URL}/api/videos/?room=${room}`,
+              axiosPlaylistOpts(),
+            )
+            .then((res) => {
+              setVideos(res.data);
+              const found = res.data.find((v) => v.id === msg.video_id);
+              if (found) setCurrentVideo(found);
+            })
+            .catch((err) => {
+              if (!isAbortError(err)) console.error(err);
+            });
         }
       }
 
@@ -181,7 +224,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
           playing: msg.content === "playing",
         };
       } else {
-        // Only seek immediately if the player is already fully loaded
         playerSeekTo(msg.timestamp);
         setPlaying(msg.content === "playing");
       }
@@ -192,14 +234,14 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       if (!isReady.current) {
         pendingSync.current = {
           time: msg.timestamp,
-          playing: pendingSync.current ? pendingSync.current.playing : playing,
+          playing: pendingSync.current
+            ? pendingSync.current.playing
+            : playingRef.current,
         };
       } else {
         playerSeekTo(msg.timestamp);
       }
     }
-
-    
 
     if (msg.type === "play") {
       remoteState.current = "play";
@@ -227,31 +269,40 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
 
     if (msg.type === "change_video") {
       const nextVideo = videosRef.current.find((v) => v.id === msg.video_id);
-      isReady.current = false; 
-      remoteState.current = "play"; // Expecting to play immediately
-      setPlaying(true); 
+      isReady.current = false;
+      remoteState.current = "play";
+      setPlaying(true);
 
       if (nextVideo) {
         setCurrentVideo(nextVideo);
         playerSeekTo(0);
       } else {
-        // Fallback if the video isn't in the local cache yet
-        axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-          setVideos(res.data);
-          const v = res.data.find((v) => v.id === msg.video_id);
-          if (v) setCurrentVideo(v);
-        });
+        axios
+          .get(`${API_URL}/api/videos/?room=${room}`, axiosPlaylistOpts())
+          .then((res) => {
+            setVideos(res.data);
+            const v = res.data.find((v) => v.id === msg.video_id);
+            if (v) setCurrentVideo(v);
+          })
+          .catch((err) => {
+            if (!isAbortError(err)) console.error(err);
+          });
       }
     }
 
     if (msg.type === "playlist_updated" || msg.type === "new_video") {
-      axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-        setVideos(res.data);
-        setCurrentVideo((prev) => {
-          if (!prev && res.data.length > 0) return res.data[0];
-          return prev;
+      axios
+        .get(`${API_URL}/api/videos/?room=${room}`, axiosPlaylistOpts())
+        .then((res) => {
+          setVideos(res.data);
+          setCurrentVideo((prev) => {
+            if (!prev && res.data.length > 0) return res.data[0];
+            return prev;
+          });
+        })
+        .catch((err) => {
+          if (!isAbortError(err)) console.error(err);
         });
-      });
     }
 
     if (msg.type === "typing") {
@@ -274,8 +325,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         username: msg.username,
       });
     }
-
-    
   };
 
   const onPlay = (t) => {
@@ -315,12 +364,13 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   };
 
   const onEnded = () => {
-    if (!isHostRef.current) return; // Only the host controls the queue
+    if (!isHostRef.current) return;
 
-    const currentIndex = videosRef.current.findIndex(v => v.id === currentVideoRef.current?.id);
+    const currentIndex = videosRef.current.findIndex(
+      (v) => v.id === currentVideoRef.current?.id,
+    );
     if (currentIndex !== -1 && currentIndex + 1 < videosRef.current.length) {
       const nextVideo = videosRef.current[currentIndex + 1];
-      // Auto-play the next video
       changeVideo(nextVideo.id);
     }
   };
@@ -348,14 +398,26 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     setError(null);
 
     const token = localStorage.getItem("watchparty_token");
-    if (!room || !username || !token) return;
+    if (!room || !username || !token) {
+      playlistAbortRef.current = null;
+      return;
+    }
 
     intentionalClose.current = false;
 
-    axios.get(`${API_URL}/api/videos/?room=${room}`).then((res) => {
-      setVideos(res.data);
-      if (res.data.length > 0) setCurrentVideo(res.data[0]);
-    });
+    const ac = new AbortController();
+    playlistAbortRef.current = ac.signal;
+
+    axios
+      .get(`${API_URL}/api/videos/?room=${room}`, { signal: ac.signal })
+      .then((res) => {
+        setVideos(res.data);
+        if (res.data.length > 0) setCurrentVideo(res.data[0]);
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        console.error("Failed to load room videos", err);
+      });
 
     const wsUrl = `${WS_URL}/ws?room=${room}&token=${token}&action=${action}`;
     ws.current = new WebSocket(wsUrl);
@@ -408,22 +470,27 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
 
     const heartbeat = setInterval(() => {
       if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({
-          type: "ping",
-          username: username,
-          room: room
-        }));
+        ws.current.send(
+          JSON.stringify({
+            type: "ping",
+            username: usernameRef.current,
+            room: room,
+          }),
+        );
       }
     }, 25000);
 
     return () => {
+      ac.abort();
+      playlistAbortRef.current = null;
       clearInterval(heartbeat);
       intentionalClose.current = true;
       if (ws.current) ws.current.close();
     };
   }, [room, username, action]);
 
-  const sendMessage = (text) =>
+  const sendMessage = (text) => {
+    if (ws.current?.readyState !== WebSocket.OPEN) return;
     ws.current.send(
       JSON.stringify({
         type: "chat",
@@ -431,8 +498,10 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         content: text,
       }),
     );
+  };
 
   const toggleHost = (targetID, status) => {
+    if (ws.current?.readyState !== WebSocket.OPEN) return;
     const payloadMsg = {
       type: status ? "revoke_control" : "grant_control",
       content: targetID,
@@ -470,5 +539,6 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     sendTypingSignal,
     setRoom,
     onEnded,
+    refreshPlaylist,
   };
 };
