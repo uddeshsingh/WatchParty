@@ -37,7 +37,7 @@ echo "🚀 Running Go Integration Tests (Redis + Live GCP)..."
 cd backend-go || exit
 # Pass the project ID to the tests using env vars
 export GCP_PROJECT_ID=$GCP_PROJECT
-go test ./internal/service/... -v
+go test ./internal/service/... -v -tags=integration
 GO_EXIT=$?
 cd ..
 

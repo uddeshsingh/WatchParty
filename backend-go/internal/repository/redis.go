@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"wpbe/internal/domain"
@@ -16,14 +17,26 @@ type RedisRepo struct {
 	client *redis.Client
 }
 
+func redisClientOptions(addr string) (*redis.Options, error) {
+	if strings.HasPrefix(addr, "redis://") || strings.HasPrefix(addr, "rediss://") {
+		opt, err := redis.ParseURL(addr)
+		if err != nil {
+			return nil, fmt.Errorf("parse redis url: %w", err)
+		}
+		return opt, nil
+	}
+	if strings.Contains(addr, "://") {
+		return nil, fmt.Errorf("redis address must be redis://, rediss://, or host:port")
+	}
+	return &redis.Options{Addr: addr}, nil
+}
+
 func NewRedisRepo(addr string) (*RedisRepo, error) {
-	// This automatically handles the rediss:// protocol for TLS
-	opt, err := redis.ParseURL(addr)
+	opt, err := redisClientOptions(addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse upstash url: %v", err)
+		return nil, err
 	}
 
-	// Explicitly set TLS for Upstash compatibility if using rediss://
 	if opt.TLSConfig != nil {
 		opt.TLSConfig.MinVersion = tls.VersionTLS12
 	}
@@ -34,7 +47,7 @@ func NewRedisRepo(addr string) (*RedisRepo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("upstash connection failed: %v", err)
+		return nil, fmt.Errorf("redis ping failed: %w", err)
 	}
 
 	return &RedisRepo{client: client}, nil
@@ -67,8 +80,6 @@ func (r *RedisRepo) SaveRoomState(ctx context.Context, roomID string, state *dom
 func (r *RedisRepo) DeleteRoomState(ctx context.Context, roomID string) error {
 	return r.client.Del(ctx, "room_state:"+roomID).Err()
 }
-
-// Add to the bottom of internal/repository/redis.go
 
 func (r *RedisRepo) GetActiveRooms(ctx context.Context) ([]domain.RoomSummary, error) {
 	var summaries []domain.RoomSummary

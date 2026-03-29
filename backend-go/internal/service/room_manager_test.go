@@ -1,7 +1,10 @@
+//go:build integration
+
 package service_test
 
 import (
 	"context"
+	"os"
 	"testing"
 	"wpbe/internal/domain"
 	"wpbe/internal/pubsub"
@@ -22,8 +25,12 @@ func TestRoomService_Integration(t *testing.T) {
 	repo, err := repository.NewRedisRepo("redis://localhost:6379")
 	require.NoError(t, err, "Must have Redis running on localhost:6379")
 
-	// 2. Connect to ACTUAL GCP Pub/Sub (Requires GCP Auth)
-	bus, err := pubsub.NewGCPPubSub(ctx, "watchparty-482106", "watchparty-events")
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	if projectID == "" {
+		projectID = "watchparty-482106"
+	}
+
+	bus, err := pubsub.NewGCPPubSub(ctx, projectID, "watchparty-events")
 	require.NoError(t, err, "Must be authenticated with GCP")
 
 	// 3. Initialize the real service

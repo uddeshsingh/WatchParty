@@ -41,6 +41,20 @@
 ## Go Backend (WebSockets & HTTP - Port 8080)
 *Source of Truth: Go structs in `backend-go/internal/domain/types.go` and behavior in `backend-go/internal/service/room_manager.go` / `backend-go/internal/handlers/websockets.go`.*
 
+### Configuration
+| Variable | Role | Notes |
+| :--- | :--- | :--- |
+| `REDIS_ADDR` | Redis / Upstash endpoint | Default `localhost:6379` (bare `host:port`). Production typically uses `rediss://…` URLs. Unsupported schemes (e.g. `http://`) are rejected. |
+| `GCP_PROJECT_ID` | Pub/Sub project | Default in server `main.go` is `watchparty-482106`; integration tests use this env when set (CI uses `test-project` with the emulator). |
+| `PORT` | HTTP listen port | Default `8080`. |
+| `JWT_SECRET` | WS JWT verification | Parsed in `handlers.WebSocketHandler`; empty falls back to a dev default. |
+
+### Testing
+| Suite | Command | Dependencies |
+| :--- | :--- | :--- |
+| Unit + repository mocks | `go test ./...` | None (no live Redis). |
+| Live integration | `go test -tags=integration ./...` | Redis reachable at `redis://localhost:6379` (or set `REDIS_ADDR`), GCP Pub/Sub or `PUBSUB_EMULATOR_HOST`; GitHub Actions runs this with Redis service + emulator. |
+
 ### HTTP Routes
 | Feature | Method & Endpoint | Input | Output | Dependencies |
 | :--- | :--- | :--- | :--- | :--- |
@@ -80,7 +94,7 @@
 ### Core State & Providers
 | Hook/Service | Purpose | Inputs/Props | State/Outputs |
 | :--- | :--- | :--- | :--- |
-| `useWatchParty` | Core WS connection & Room Sync | `urlRoom` (string\|null), `action` (`"join"`\|`"create"`) | `room`, `username`, `isHost`, `userList`, `myID`, `messages`, `videos`, `currentVideo`, `playing`, `playerRef`, `typingUsers`, `lastReaction`, `error`, `setCurrentVideo`, `sendReaction`, `setUsername`, `onReady`, `onPlay`, `onPause`, `onSeek`, `sendMessage`, `toggleHost`, `sendNotification`, `changeVideo`, `sendTypingSignal`, `setRoom`, `onEnded` |
+| `useWatchParty` | Core WS connection & Room Sync | `urlRoom` (string\|null), `action` (`"join"`\|`"create"`) | `room`, `username`, `isHost`, `userList`, `myID`, `messages`, `videos`, `currentVideo`, `playing`, `playerRef`, `typingUsers`, `lastReaction`, `error`, `setCurrentVideo`, `sendReaction`, `setUsername`, `onReady`, `onPlay`, `onPause`, `onSeek`, `sendMessage`, `toggleHost`, `sendNotification`, `changeVideo`, `sendTypingSignal`, `setRoom`, `onEnded`, `refreshPlaylist` |
 | `Config.js` | Environment configuration | None | `API_URL` (Python backend), `WS_URL` (Go backend). Dev: auto-detects `hostname:8000` / `hostname:8080`. Prod: reads `VITE_API_URL`, `VITE_WS_URL`. |
 
 ### UI Component Tree

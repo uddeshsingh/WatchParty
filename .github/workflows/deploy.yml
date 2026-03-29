@@ -38,7 +38,7 @@ jobs:
         run: |
           cd backend-go
           go mod tidy
-          go test -v ./...
+          go test -v -tags=integration ./...
 
   # ----------------------------------------------------------------
   # JOB 2: TEST PYTHON BACKEND

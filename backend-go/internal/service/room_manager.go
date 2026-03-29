@@ -75,8 +75,11 @@ func (s *RoomService) HandleVideoCommand(ctx context.Context, roomID string, msg
 
 func (s *RoomService) HandleHostChange(ctx context.Context, roomID string, msg domain.Message) error {
 	state, err := s.repo.GetRoomState(ctx, roomID)
-	if err != nil || state == nil {
+	if err != nil {
 		return err
+	}
+	if state == nil {
+		return fmt.Errorf("room not found")
 	}
 
 	targetID := msg.Content
@@ -85,7 +88,9 @@ func (s *RoomService) HandleHostChange(ctx context.Context, roomID string, msg d
 	if user, ok := state.Clients[targetID]; ok {
 		user.IsHost = isPromoting
 		state.Clients[targetID] = user
-		s.repo.SaveRoomState(ctx, roomID, state)
+		if err := s.repo.SaveRoomState(ctx, roomID, state); err != nil {
+			return err
+		}
 
 		s.bus.Publish(ctx, domain.Message{
 			Type:   "host_updated",
@@ -196,7 +201,10 @@ func (s *RoomService) JoinRoom(ctx context.Context, roomID, action string, clien
 	}
 
 	s.RegisterLocalClient(roomID, client)
-	s.repo.SaveRoomState(ctx, roomID, state)
+	if err := s.repo.SaveRoomState(ctx, roomID, state); err != nil {
+		s.RemoveLocalClient(roomID, client)
+		return err
+	}
 
 	if client.Conn != nil {
 		client.Conn.WriteJSON(domain.Message{Type: "identity", UserID: client.ID, IsHost: client.IsHost})

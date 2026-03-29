@@ -46,6 +46,15 @@ func TestRoomService_JoinRoom_Unit(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, "room_not_found_silent", err.Error())
 	})
+
+	t.Run("Save Failure Rolls Back Local Client", func(t *testing.T) {
+		mockRepo.On("GetRoomState", ctx, roomID).Return(nil, nil).Once()
+		mockRepo.On("SaveRoomState", ctx, roomID, mock.Anything).Return(assert.AnError).Once()
+
+		err := svc.JoinRoom(ctx, roomID, "create", client)
+		assert.Error(t, err)
+		mockRepo.AssertExpectations(t)
+	})
 }
 
 func TestRoomService_HandleVideoCommand_Unit(t *testing.T) {
@@ -64,7 +73,7 @@ func TestRoomService_HandleVideoCommand_Unit(t *testing.T) {
 	t.Run("Play Command Updates State", func(t *testing.T) {
 		// GIVEN: Existing room state
 		mockRepo.On("GetRoomState", ctx, roomID).Return(initialState, nil).Once()
-		
+
 		// Expectation for state update
 		expectedState := &domain.RoomState{
 			VideoID:   2,
@@ -72,7 +81,7 @@ func TestRoomService_HandleVideoCommand_Unit(t *testing.T) {
 			Timestamp: 45.5,
 		}
 		mockRepo.On("SaveRoomState", ctx, roomID, expectedState).Return(nil).Once()
-		
+
 		msg := domain.Message{Type: "play", VideoID: 2, Timestamp: 45.5, Room: roomID}
 		mockBus.On("Publish", ctx, msg).Return(nil).Once()
 
@@ -137,7 +146,7 @@ func TestRoomService_HandleHostChange_Unit(t *testing.T) {
 		mockBus.On("Publish", ctx, mock.Anything).Return(nil).Twice() // host_updated and user_list
 
 		msg := domain.Message{Type: "grant_control", Content: "user-2", Room: roomID}
-		
+
 		// WHEN: Granting control to user-2
 		err := svc.HandleHostChange(ctx, roomID, msg)
 
