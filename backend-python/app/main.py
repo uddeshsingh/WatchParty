@@ -2,12 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import threading
-import os
 
 from app.api.routes import router as video_router, get_db, get_video_service
 from app.api.auth import router as auth_router
 from app.pubsub.gcp_listener import GCPPubSubListener
 from app.repository.database import engine, Base
+from app.cors_settings import resolve_cors_settings
 
 
 @asynccontextmanager
@@ -41,18 +41,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="WatchParty API", lifespan=lifespan)
 
-allowed_origins = [
-    o.strip()
-    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Accept", "Authorization", "Content-Type"],
-    allow_credentials=True,
-)
+_allow_any, _explicit_origins = resolve_cors_settings()
+if _allow_any:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Accept", "Authorization", "Content-Type"],
+        allow_credentials=False,
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_explicit_origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Accept", "Authorization", "Content-Type"],
+        allow_credentials=True,
+    )
 
 app.include_router(video_router)
 app.include_router(auth_router)

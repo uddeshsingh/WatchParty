@@ -6,9 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
+	"wpbe/internal/corsutil"
 	"wpbe/internal/domain"
 
 	"github.com/go-playground/validator/v10"
@@ -19,26 +19,18 @@ import (
 
 var validate = validator.New()
 
-func getAllowedOrigins() []string {
-	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
-		parts := strings.Split(origins, ",")
-		for i := range parts {
-			parts[i] = strings.TrimSpace(parts[i])
-		}
-		return parts
-	}
-	return []string{"http://localhost:5173"}
-}
-
 func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
-	allowedOrigins := getAllowedOrigins()
+	allowAny, allowedOrigins := corsutil.AllowedOrigins()
 	wsUpgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
+			if allowAny {
+				return true
+			}
 			origin := r.Header.Get("Origin")
 			if origin == "" {
 				return false

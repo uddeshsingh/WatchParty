@@ -23,7 +23,7 @@
 ### Authentication & Authorization
 - **JWT tokens** include `exp` claim (24h TTL). Tokens are issued by `create_token()` in `auth.py`.
 - **`get_current_user`** (`backend-python/app/api/auth.py`): FastAPI `Depends()` guard using `HTTPBearer`. Validates JWT from `Authorization: Bearer <token>` header. Returns username or raises 401.
-- **CORS**: Controlled by `ALLOWED_ORIGINS` env var (comma-separated). Defaults to `http://localhost:5173`.
+- **CORS**: Controlled by `ALLOWED_ORIGINS`. Comma-separated origins with `allow_credentials=True`, or set exactly `*` for `Access-Control-Allow-Origin: *` and `allow_credentials=False` (works with JWT in `Authorization`; use for public Cloud Run). Defaults to `http://localhost:5173`. Implemented via `resolve_cors_settings()` in `backend-python/app/cors_settings.py`.
 - **Google SSO**: Requires `GOOGLE_CLIENT_ID` env var; returns 503 if unset. SSO users get a random `!sso:<hex>` hash as password placeholder (never matches bcrypt verification).
 
 ### Active Routes & Core Functions
@@ -40,6 +40,7 @@
 ### Testing
 | Suite | Command | Dependencies |
 | :--- | :--- | :--- |
+| Local env | `conda activate wpenv`; run from `backend-python/` with `PYTHONPATH=.` | Conda env `wpenv` (local/agent runs); CI uses `pip` + `python-version` from workflow. |
 | Unit tests | `pytest tests/ -m "not integration"` | None (SQLite in-memory, mocked I/O). |
 | Integration | `pytest tests/ -m integration` | Live PostgreSQL at `DATABASE_URL`, GCP Pub/Sub or emulator. |
 
@@ -60,7 +61,7 @@
 | `GCP_PROJECT_ID` | Pub/Sub project | Default in server `main.go` is `watchparty-482106`; integration tests use this env when set (CI uses `test-project` with the emulator). |
 | `PORT` | HTTP listen port | Default `8080`. |
 | `JWT_SECRET` | WS JWT verification | **Required** — server exits on startup if unset. Validates HMAC-SHA256 signing method. |
-| `ALLOWED_ORIGINS` | CORS & WS origin allowlist | Comma-separated origins. Default `http://localhost:5173`. Applied to both CORS middleware and WebSocket `CheckOrigin`. |
+| `ALLOWED_ORIGINS` | CORS & WS origin allowlist | Comma-separated origins (CORS with credentials), or exactly `*` to allow any browser origin (CORS without credentials; WebSocket `CheckOrigin` allows all). Default `http://localhost:5173`. Parsed in `backend-go/internal/corsutil/corsutil.go`. |
 
 ### Testing
 | Suite | Command | Dependencies |

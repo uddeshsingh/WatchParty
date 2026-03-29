@@ -3,6 +3,14 @@ description: Python best practices and patterns for modern software development 
 globs: **/*.py, src/**/*.py, tests/**/*.py
 ---
 
+# WatchParty Python backend — test environment
+
+- **Always** run Python tests for this repo inside the Conda env **`wpenv`**: `conda activate wpenv`.
+- Working directory: `backend-python/`. Set `PYTHONPATH=.` (matches CI).
+- Example: `cd backend-python && PYTHONPATH=. pytest tests/ -v`
+- Shell one-liner (bash): `eval "$(conda shell.bash hook)" && conda activate wpenv && cd backend-python && PYTHONPATH=. pytest tests/ -v`
+- GitHub Actions does not use Conda; the above applies to **local** runs and agent-driven verification.
+
 # Python Best Practices
 
 ## Project Structure

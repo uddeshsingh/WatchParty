@@ -3,10 +3,9 @@ package api
 import (
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
+	"wpbe/internal/corsutil"
 	"wpbe/internal/domain"
 	"wpbe/internal/handlers"
 
@@ -32,31 +31,32 @@ func NewServer(rm domain.RoomManager) *Server {
 	return s
 }
 
-func getAllowedOrigins() []string {
-	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
-		parts := strings.Split(origins, ",")
-		for i := range parts {
-			parts[i] = strings.TrimSpace(parts[i])
-		}
-		return parts
-	}
-	return []string{"http://localhost:5173"}
-}
-
 func (s *Server) setupMiddleware() {
 	s.Router.Use(middleware.RequestID)
 	s.Router.Use(middleware.RealIP)
 	s.Router.Use(middleware.Logger)
 	s.Router.Use(middleware.Recoverer)
 
-	s.Router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   getAllowedOrigins(),
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	allowAny, origins := corsutil.AllowedOrigins()
+	if allowAny {
+		s.Router.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   []string{"*"},
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: false,
+			MaxAge:           300,
+		}))
+	} else {
+		s.Router.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   origins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: true,
+			MaxAge:           300,
+		}))
+	}
 }
 
 func (s *Server) setupRoutes() {

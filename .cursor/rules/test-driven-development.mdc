@@ -11,7 +11,7 @@ alwaysApply: true
 2. **Tests first** — Add or extend **failing** tests that describe that behavior before (or without) implementing production code. Prefer the smallest test that proves the contract.
 3. **Implement** — Write the minimal code to make tests pass; refactor with tests green.
 4. **CI/CD** — New or changed behavior must be covered by tests that run in GitHub Actions (`.github/workflows/`). Include **unit tests** (isolated, fast) and **integration tests** (real boundaries: DB, HTTP, queues, emulators) where the feature touches those layers.
-5. **Local verification** — After changing implementation code, run the relevant test command(s) for that area (e.g. `go test ./...`, `pytest`, frontend test script) before considering the task done.
+5. **Local verification** — After changing implementation code, run the relevant test command(s) for that area before considering the task done. For **WatchParty `backend-python`**, use Conda env **`wpenv`** (`conda activate wpenv`), `cd backend-python`, `PYTHONPATH=. pytest …` (see `.cursor/rules/backend-python.mdc`). Otherwise e.g. `go test ./...`, frontend test script.
 
 ## When changing existing functionality
 
