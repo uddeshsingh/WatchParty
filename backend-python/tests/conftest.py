@@ -16,6 +16,7 @@ if not os.getenv("DATABASE_URL"):
 
 from app.main import app
 from app.api.routes import get_db
+from app.api.auth import get_db as auth_get_db
 from app.repository.database import Base
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -68,5 +69,6 @@ def db_session():
     finally:
         db.close()
 
-# Force FastAPI to use the test database
+# Force FastAPI to use the test database for both route modules
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[auth_get_db] = override_get_db

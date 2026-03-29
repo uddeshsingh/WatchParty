@@ -8,6 +8,7 @@ from app.repository.database import SessionLocal, engine, Base
 from app.domain.schemas import VideoCreateReq
 from app.repository.models import VideoModel
 
+@pytest.mark.integration
 def test_actual_video_pipeline():
     # Ensure schema exists in actual DB
     Base.metadata.create_all(bind=engine)

@@ -38,19 +38,10 @@ def add_video(req: VideoCreateReq, service: VideoService = Depends(get_video_ser
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/videos/{video_id}")
-def delete_video(video_id: int, room: str, db: Session = Depends(get_db)):
-    from app.repository.models import VideoModel
-    db.query(VideoModel).filter(VideoModel.id == video_id).delete()
-    db.commit()
-    
-    # Trigger Pub/Sub playlist refresh
-    publisher.broadcast_video_added(room, {})
+def delete_video(video_id: int, room: str, service: VideoService = Depends(get_video_service)):
+    service.delete_video(video_id, room)
     return {"status": "deleted"}
 
 @router.post("/videos/metadata", response_model=List[VideoResponse])
-def get_videos_metadata(req: MetadataReq, db: Session = Depends(get_db)):
-    from app.repository.models import VideoModel
-    if not req.video_ids:
-        return []
-    videos = db.query(VideoModel).filter(VideoModel.id.in_(req.video_ids)).all()
-    return videos
+def get_videos_metadata(req: MetadataReq, service: VideoService = Depends(get_video_service)):
+    return service.get_videos_metadata(req.video_ids)

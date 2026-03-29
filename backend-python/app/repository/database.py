@@ -4,6 +4,12 @@ import os
 
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not SQLALCHEMY_DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not set. "
+        "Example: postgresql://user:pass@localhost:5432/watchparty"
+    )
+
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_size=5,

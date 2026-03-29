@@ -9,7 +9,7 @@
 
 ## Global Data Models (Core Entities)
 - **`UserModel`** (`backend-python/app/repository/models.py`): Managed by Python API. Fields: `id`, `username`, `email` (nullable), `hashed_password`, `created_at`. Password hashing/verification is implemented in `backend-python/app/api/auth.py`.
-- **`VideoModel`** (`backend-python/app/repository/models.py`): Stored in PostgreSQL. Fields: `id`, `title`, `video_url`, `thumbnail` (nullable), `room` (default `"general"`), `uploaded_at`.
+- **`VideoModel`** (`backend-python/app/repository/models.py`): Stored in PostgreSQL. Fields: `id`, `title`, `video_url`, `thumbnail` (nullable), `room` (default `"general"`), `uploaded_at`. Note: `VideoResponse` schema mirrors nullable `thumbnail` as `Optional[str]`.
 - **`domain.Message`** (`backend-go/internal/domain/types.go`): The single unified Go struct handling all WebSocket inbound/outbound payloads. Fields: `Type`, `Username`, `UserID`, `Content`, `Timestamp` (float64), `VideoID` (int), `Room`, `IsHost`, `UserList` ([]UserSummary, omitempty), `Data` (interface{}, omitempty).
 - **`domain.RoomState`** (`backend-go/internal/domain/types.go`): Redis-persisted room state. Fields: `VideoID` (int), `Timestamp` (float64), `Playing` (bool), `LastUpdated` (time.Time), `Clients` (map[string]UserSummary).
 - **`domain.RoomSummary`** (`backend-go/internal/domain/types.go`): Room listing payload. Fields: `Name` (string), `Count` (int), `VideoID` (int).
@@ -28,8 +28,14 @@
 | **SSO Login** | `POST /api/auth/google/` | `GoogleAuth` (`backend-python/app/api/auth.py`) | `AuthResponse` | Google OAuth |
 | **Add Video** | `POST /api/videos/add` | `VideoCreateReq` | `VideoResponse` | DB, Scraper, PubSub |
 | **List Videos** | `GET /api/videos` | Query: `room` (default `"general"`) | `List[VideoResponse]`| DB |
-| **Bulk Meta** | `POST /api/videos/metadata` | `MetadataReq` | `List[VideoResponse]`| DB |
-| **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | DB, PubSub |
+| **Bulk Meta** | `POST /api/videos/metadata` | `MetadataReq` | `List[VideoResponse]`| VideoService → VideoRepo |
+| **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | VideoService → VideoRepo, PubSub |
+
+### Testing
+| Suite | Command | Dependencies |
+| :--- | :--- | :--- |
+| Unit tests | `pytest tests/ -m "not integration"` | None (SQLite in-memory, mocked I/O). |
+| Integration | `pytest tests/ -m integration` | Live PostgreSQL at `DATABASE_URL`, GCP Pub/Sub or emulator. |
 
 ### Pub/Sub Listener (Background)
 | Behavior | Trigger | Action | Dependencies |

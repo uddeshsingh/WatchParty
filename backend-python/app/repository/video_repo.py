@@ -27,13 +27,22 @@ class VideoRepoImpl(VideoRepository):
         self.db.refresh(db_video)
         return VideoResponse.model_validate(db_video)
 
+    def delete_video_by_id(self, video_id: int) -> None:
+        self.db.query(VideoModel).filter(VideoModel.id == video_id).delete()
+        self.db.commit()
+
     def delete_videos_by_room(self, room: str) -> None:
         self.db.query(VideoModel).filter(VideoModel.room == room).delete()
         self.db.commit()
-    
-    # Add to VideoRepoImpl class
+
     def get_video_by_url(self, url: str) -> VideoResponse | None:
         db_video = self.db.query(VideoModel).filter(VideoModel.video_url == url).first()
         if db_video:
             return VideoResponse.model_validate(db_video)
         return None
+
+    def get_videos_by_ids(self, video_ids: List[int]) -> List[VideoResponse]:
+        if not video_ids:
+            return []
+        videos = self.db.query(VideoModel).filter(VideoModel.id.in_(video_ids)).all()
+        return [VideoResponse.model_validate(v) for v in videos]

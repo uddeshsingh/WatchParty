@@ -6,6 +6,7 @@ from app.repository.database import SessionLocal, engine, Base
 from app.repository.models import VideoModel
 from app.domain.schemas import VideoCreateReq
 
+@pytest.mark.integration
 def test_full_video_pipeline():
     # 1. Ensure tables exist in actual Postgres
     Base.metadata.create_all(bind=engine)

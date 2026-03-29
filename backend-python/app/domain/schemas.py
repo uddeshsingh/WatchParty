@@ -11,10 +11,9 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: Optional[str]
+    email: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class UserLogin(BaseModel):
     username: str
@@ -34,7 +33,7 @@ class VideoResponse(BaseModel):
     id: int
     title: str
     video_url: str
-    thumbnail: str
+    thumbnail: Optional[str] = None
     room: str
     uploaded_at: datetime
 

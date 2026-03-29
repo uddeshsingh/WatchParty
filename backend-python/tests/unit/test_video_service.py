@@ -98,3 +98,38 @@ def test_process_and_add_video_via_scraper(mock_fetch, video_service, mock_repo,
     mock_repo.save_video.assert_called_once()
     assert result.title == "Scraped Title"
     assert result.thumbnail == "https://example.com/new.png"
+
+
+def test_delete_video(video_service, mock_repo, mock_publisher):
+    # WHEN: Deleting a video
+    video_service.delete_video(42, "test-room")
+
+    # THEN: Repo delete is called and publisher broadcasts the update
+    mock_repo.delete_video_by_id.assert_called_once_with(42)
+    mock_publisher.broadcast_video_added.assert_called_once_with("test-room", {})
+
+
+def test_get_videos_metadata(video_service, mock_repo):
+    expected = [
+        VideoResponse(
+            id=1, title="V1", video_url="https://example.com/1",
+            thumbnail=None, room="r", uploaded_at=datetime.now(),
+        ),
+    ]
+    mock_repo.get_videos_by_ids.return_value = expected
+
+    # WHEN: Requesting metadata for a list of IDs
+    result = video_service.get_videos_metadata([1])
+
+    # THEN: Repo is called with the IDs and result is forwarded
+    mock_repo.get_videos_by_ids.assert_called_once_with([1])
+    assert result == expected
+
+
+def test_get_videos_metadata_empty(video_service, mock_repo):
+    mock_repo.get_videos_by_ids.return_value = []
+
+    result = video_service.get_videos_metadata([])
+
+    mock_repo.get_videos_by_ids.assert_called_once_with([])
+    assert result == []
