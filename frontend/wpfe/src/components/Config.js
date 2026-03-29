@@ -17,7 +17,7 @@ if (isProduction) {
     const httpProto = isSecure ? 'https' : 'http';
     const wsProto = isSecure ? 'wss' : 'ws';
     
-    // We assume Backend (Django) is on :8000 and Go is on :8080
+    // We assume Backend (FastAPI) is on :8000 and Go is on :8080
     API_URL = `${httpProto}://${hostname}:8000`;
     WS_URL = `${wsProto}://${hostname}:8080`;
 }
