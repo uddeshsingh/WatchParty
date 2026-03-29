@@ -20,16 +20,22 @@
 ## Python Backend (FastAPI - Port 8000)
 *Primary source of truth: Pydantic schemas in `backend-python/app/domain/schemas.py`; note that `GoogleAuth` is currently defined inline in `backend-python/app/api/auth.py`.*
 
+### Authentication & Authorization
+- **JWT tokens** include `exp` claim (24h TTL). Tokens are issued by `create_token()` in `auth.py`.
+- **`get_current_user`** (`backend-python/app/api/auth.py`): FastAPI `Depends()` guard using `HTTPBearer`. Validates JWT from `Authorization: Bearer <token>` header. Returns username or raises 401.
+- **CORS**: Controlled by `ALLOWED_ORIGINS` env var (comma-separated). Defaults to `http://localhost:5173`.
+- **Google SSO**: Requires `GOOGLE_CLIENT_ID` env var; returns 503 if unset. SSO users get a random `!sso:<hex>` hash as password placeholder (never matches bcrypt verification).
+
 ### Active Routes & Core Functions
-| Feature | Method & Endpoint | Input Schema/Params | Output Schema | Dependencies |
-| :--- | :--- | :--- | :--- | :--- |
-| **Register** | `POST /api/auth/registration/` | `UserCreate` | `AuthResponse` | DB |
-| **Login** | `POST /api/auth/login/` | `UserLogin` | `AuthResponse` | DB, bcrypt |
-| **SSO Login** | `POST /api/auth/google/` | `GoogleAuth` (`backend-python/app/api/auth.py`) | `AuthResponse` | Google OAuth |
-| **Add Video** | `POST /api/videos/add` | `VideoCreateReq` | `VideoResponse` | DB, Scraper, PubSub |
-| **List Videos** | `GET /api/videos` | Query: `room` (default `"general"`) | `List[VideoResponse]`| DB |
-| **Bulk Meta** | `POST /api/videos/metadata` | `MetadataReq` | `List[VideoResponse]`| VideoService → VideoRepo |
-| **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | VideoService → VideoRepo, PubSub |
+| Feature | Method & Endpoint | Input Schema/Params | Output Schema | Auth | Dependencies |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Register** | `POST /api/auth/registration/` | `UserCreate` | `AuthResponse` | None | DB |
+| **Login** | `POST /api/auth/login/` | `UserLogin` | `AuthResponse` | None | DB, bcrypt |
+| **SSO Login** | `POST /api/auth/google/` | `GoogleAuth` (`backend-python/app/api/auth.py`) | `AuthResponse` | None | Google OAuth |
+| **Add Video** | `POST /api/videos/add` | `VideoCreateReq` | `VideoResponse` | Bearer JWT | DB, Scraper, PubSub |
+| **List Videos** | `GET /api/videos` | Query: `room` (default `"general"`) | `List[VideoResponse]`| Bearer JWT | DB |
+| **Bulk Meta** | `POST /api/videos/metadata` | `MetadataReq` | `List[VideoResponse]`| Bearer JWT | VideoService → VideoRepo |
+| **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | Bearer JWT | VideoService → VideoRepo, PubSub |
 
 ### Testing
 | Suite | Command | Dependencies |
@@ -53,7 +59,8 @@
 | `REDIS_ADDR` | Redis / Upstash endpoint | Default `localhost:6379` (bare `host:port`). Production typically uses `rediss://…` URLs. Unsupported schemes (e.g. `http://`) are rejected. |
 | `GCP_PROJECT_ID` | Pub/Sub project | Default in server `main.go` is `watchparty-482106`; integration tests use this env when set (CI uses `test-project` with the emulator). |
 | `PORT` | HTTP listen port | Default `8080`. |
-| `JWT_SECRET` | WS JWT verification | Parsed in `handlers.WebSocketHandler`; empty falls back to a dev default. |
+| `JWT_SECRET` | WS JWT verification | **Required** — server exits on startup if unset. Validates HMAC-SHA256 signing method. |
+| `ALLOWED_ORIGINS` | CORS & WS origin allowlist | Comma-separated origins. Default `http://localhost:5173`. Applied to both CORS middleware and WebSocket `CheckOrigin`. |
 
 ### Testing
 | Suite | Command | Dependencies |
@@ -68,16 +75,16 @@
 | **Health** | `GET /health` | None | `{"status":"healthy"}` | None |
 
 ### WebSocket Connection (`/ws`)
-*Query params:* `?room={id}&action={join/create}&token={jwt}` — `room` defaults to `"general"`, `action` defaults to `"join"`. JWT `sub` is parsed using `JWT_SECRET`; the current handler rejects missing/invalid subjects but does not explicitly enforce a signing method check.
+*Query params:* `?room={id}&action={join/create}` — `room` defaults to `"general"`, `action` defaults to `"join"`. Authentication uses **first-message auth**: the client sends `{type: "auth", token: "<jwt>"}` as the first WebSocket message after connection. JWT `sub` is parsed using `JWT_SECRET` with explicit HMAC-SHA256 signing method verification. Read limit is 64KB per message.
 
 ### Inbound WebSocket Events (Client → Server)
 | Action Category | Event Types (`msg.Type`) | Handler | Effect |
 | :--- | :--- | :--- | :--- |
 | **Keepalive** | `ping` | No-op (silently consumed) | Prevents connection timeout |
-| **Video Sync** | `play`, `pause`, `seek`, `sync_state` | `HandleVideoCommand` | Updates `RoomState` in Redis, publishes via EventBus |
-| **Queue Mgmt** | `change_video` | `HandleChangeVideo` | Sets new `VideoID`, `Playing=true` in Redis, publishes via EventBus |
+| **Video Sync** | `play`, `pause`, `seek`, `sync_state` | `HandleVideoCommand` | Updates `RoomState` in Redis, publishes via EventBus. **Host-only**: rejects non-host senders. |
+| **Queue Mgmt** | `change_video` | `HandleChangeVideo` | Sets new `VideoID`, `Playing=true` in Redis, publishes via EventBus. **Host-only**: rejects non-host senders. |
 | **Social** | `chat`, `reaction`, `typing`, `new_video` | `PublishDirectEvent` | Direct pass-through publish via EventBus |
-| **Permissions** | `grant_control`, `revoke_control` | `HandleHostChange` | Updates host flag in `RoomState.Clients`, publishes `host_updated` + `user_list` |
+| **Permissions** | `grant_control`, `revoke_control` | `HandleHostChange` | Updates host flag in `RoomState.Clients`, publishes `host_updated` + `user_list`. **Host-only**: rejects non-host senders. |
 
 ### Outbound WebSocket Events (Server → Client)
 | Event Type | Emitted By | Payload Notes |

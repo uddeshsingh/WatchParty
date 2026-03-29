@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"wpbe/internal/domain"
@@ -15,18 +17,44 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var (
-	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+var validate = validator.New()
+
+func getAllowedOrigins() []string {
+	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
+		parts := strings.Split(origins, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
 	}
-	validate = validator.New()
-)
+	return []string{"http://localhost:5173"}
+}
 
 func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is required")
+	}
+
+	allowedOrigins := getAllowedOrigins()
+	wsUpgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return false
+			}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+			return false
+		},
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomID := r.URL.Query().Get("room")
 		action := r.URL.Query().Get("action")
-		tokenStr := r.URL.Query().Get("token")
 
 		if action == "" {
 			action = "join"
@@ -35,17 +63,34 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 			roomID = "general"
 		}
 
-		secret := os.Getenv("JWT_SECRET")
-		if secret == "" {
-			secret = "super-secret-fallback"
+		ws, err := wsUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("Failed to upgrade WS connection: %v", err)
+			return
 		}
 
-		token, _ := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
+		ws.SetReadLimit(65536)
+		ws.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+		var authMsg struct {
+			Type  string `json:"type"`
+			Token string `json:"token"`
+		}
+		if err := ws.ReadJSON(&authMsg); err != nil || authMsg.Type != "auth" {
+			ws.WriteJSON(domain.Message{Type: "error", Content: "Authentication required"})
+			ws.Close()
+			return
+		}
+
+		token, err := jwt.Parse(authMsg.Token, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(jwtSecret), nil
 		})
 
 		var username string
-		if token != nil && token.Valid {
+		if err == nil && token != nil && token.Valid {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
 				if sub, ok := claims["sub"].(string); ok {
 					username = sub
@@ -54,16 +99,14 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 		}
 
 		if username == "" {
-			log.Printf("WS connection rejected: Invalid or missing token")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			log.Printf("WS connection rejected: invalid or missing token")
+			ws.WriteJSON(domain.Message{Type: "error", Content: "Unauthorized"})
+			time.Sleep(500 * time.Millisecond)
+			ws.Close()
 			return
 		}
 
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			log.Printf("Failed to upgrade WS connection: %v", err)
-			return
-		}
+		ws.SetReadDeadline(time.Time{})
 
 		clientID := uuid.New().String()
 		client := &domain.Client{
@@ -83,7 +126,7 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 		}
 
 		go func() {
-			ticker := time.NewTicker(25 * time.Second) // Ping interval
+			ticker := time.NewTicker(25 * time.Second)
 			defer func() {
 				ticker.Stop()
 				ws.Close()
@@ -108,13 +151,11 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 			}
 		}()
 
-		// Clean up when the read loop breaks
 		defer func() {
 			rm.LeaveRoom(r.Context(), roomID, client)
 			ws.Close()
 		}()
 
-		// READ LOOP
 		for {
 			var msg domain.Message
 			if err := ws.ReadJSON(&msg); err != nil {

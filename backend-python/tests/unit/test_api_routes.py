@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 from app.main import app
 from app.api.routes import get_video_service, get_db
+from app.api.auth import create_token
 from app.domain.schemas import VideoResponse
 from datetime import datetime
 
@@ -11,8 +12,12 @@ def mock_service():
     return MagicMock()
 
 @pytest.fixture
+def auth_headers():
+    token = create_token("test-user")
+    return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture
 def api_client(mock_service):
-    # Setup overrides
     original_service = app.dependency_overrides.get(get_video_service)
     original_db = app.dependency_overrides.get(get_db)
     
@@ -21,7 +26,6 @@ def api_client(mock_service):
     
     yield TestClient(app)
     
-    # Restore overrides
     if original_service:
         app.dependency_overrides[get_video_service] = original_service
     else:
@@ -32,20 +36,20 @@ def api_client(mock_service):
     else:
         del app.dependency_overrides[get_db]
 
-def test_get_videos_empty(api_client, mock_service):
-    # GIVEN: A mock repo that returns an empty list
+def test_get_videos_unauthenticated(api_client, mock_service):
+    response = api_client.get("/api/videos?room=general")
+    assert response.status_code == 401
+
+def test_get_videos_empty(api_client, mock_service, auth_headers):
     mock_service.repo.get_videos_by_room.return_value = []
     
-    # WHEN: Calling the GET /api/videos endpoint
-    response = api_client.get("/api/videos?room=general")
+    response = api_client.get("/api/videos?room=general", headers=auth_headers)
     
-    # THEN: It should return a 200 OK and an empty list
     assert response.status_code == 200
     assert response.json() == []
     mock_service.repo.get_videos_by_room.assert_called_with("general")
 
-def test_add_video_endpoint(api_client, mock_service):
-    # GIVEN: A mock service that returns a VideoResponse
+def test_add_video_endpoint(api_client, mock_service, auth_headers):
     mock_service.process_and_add_video.return_value = VideoResponse(
         id=10,
         title="API Title",
@@ -55,22 +59,17 @@ def test_add_video_endpoint(api_client, mock_service):
         uploaded_at=datetime.now()
     )
     
-    # WHEN: Calling the POST /api/videos/add endpoint
     payload = {"url": "https://youtube.com/watch?v=api", "room": "api-room"}
-    response = api_client.post("/api/videos/add", json=payload)
+    response = api_client.post("/api/videos/add", json=payload, headers=auth_headers)
     
-    # THEN: It should return a 200 OK and the video data
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "API Title"
     assert data["id"] == 10
     mock_service.process_and_add_video.assert_called_once()
 
-def test_delete_video_endpoint(api_client):
-    # The api_client fixture already mocks get_db
-    # WHEN: Calling the DELETE /api/videos/{id} endpoint
-    response = api_client.delete("/api/videos/10?room=api-room")
+def test_delete_video_endpoint(api_client, auth_headers):
+    response = api_client.delete("/api/videos/10?room=api-room", headers=auth_headers)
     
-    # THEN: It should return a 200 OK
     assert response.status_code == 200
     assert response.json() == {"status": "deleted"}

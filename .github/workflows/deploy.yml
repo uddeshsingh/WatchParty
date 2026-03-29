@@ -179,6 +179,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
 
       # ---------------------------------------------------
       # 🚀 FAST DEPLOY: GO WEBSOCKET
@@ -202,6 +203,7 @@ jobs:
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
 
   # ----------------------------------------------------------------
   # JOB 6: DEPLOY FRONTEND
@@ -217,6 +219,7 @@ jobs:
           cd frontend/wpfe
           echo "VITE_API_URL=${{ needs.deploy-backends.outputs.python_url }}" > .env
           echo "VITE_WS_URL=${{ needs.deploy-backends.outputs.go_url }}" | sed 's/https/wss/' >> .env
+          echo "VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
           npm install && npm run build
       
       - name: Firebase Deploy

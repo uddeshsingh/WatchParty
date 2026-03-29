@@ -419,8 +419,12 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         console.error("Failed to load room videos", err);
       });
 
-    const wsUrl = `${WS_URL}/ws?room=${room}&token=${token}&action=${action}`;
+    const wsUrl = `${WS_URL}/ws?room=${room}&action=${action}`;
     ws.current = new WebSocket(wsUrl);
+
+    ws.current.onopen = () => {
+      ws.current.send(JSON.stringify({ type: "auth", token }));
+    };
 
     ws.current.onmessage = (event) => {
       const msg = JSON.parse(event.data);

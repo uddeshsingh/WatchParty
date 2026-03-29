@@ -56,6 +56,10 @@ func (s *RoomService) HandleVideoCommand(ctx context.Context, roomID string, msg
 		state = &domain.RoomState{}
 	}
 
+	if sender, ok := state.Clients[msg.UserID]; !ok || !sender.IsHost {
+		return fmt.Errorf("unauthorized: only hosts can control playback")
+	}
+
 	switch msg.Type {
 	case "play":
 		state.Playing = true
@@ -80,6 +84,10 @@ func (s *RoomService) HandleHostChange(ctx context.Context, roomID string, msg d
 	}
 	if state == nil {
 		return fmt.Errorf("room not found")
+	}
+
+	if sender, ok := state.Clients[msg.UserID]; !ok || !sender.IsHost {
+		return fmt.Errorf("unauthorized: only hosts can change permissions")
 	}
 
 	targetID := msg.Content
@@ -111,6 +119,10 @@ func (s *RoomService) HandleChangeVideo(ctx context.Context, roomID string, msg 
 	}
 	if state == nil {
 		state = &domain.RoomState{}
+	}
+
+	if sender, ok := state.Clients[msg.UserID]; !ok || !sender.IsHost {
+		return fmt.Errorf("unauthorized: only hosts can change video")
 	}
 
 	state.VideoID = msg.VideoID

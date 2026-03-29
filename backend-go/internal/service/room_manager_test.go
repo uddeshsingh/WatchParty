@@ -65,18 +65,24 @@ func TestRoomService_Integration(t *testing.T) {
 	})
 
 	t.Run("Handle Video Command (Play)", func(t *testing.T) {
-		msg := domain.Message{Type: "play", Timestamp: 12.5, VideoID: 1, Room: roomID}
+		msg := domain.Message{Type: "play", Timestamp: 12.5, VideoID: 1, Room: roomID, UserID: clientA.ID}
 		err := svc.HandleVideoCommand(ctx, roomID, msg)
 		assert.NoError(t, err)
 
-		// Verify it actually saved to Redis
 		state, _ := repo.GetRoomState(ctx, roomID)
 		assert.True(t, state.Playing)
 		assert.Equal(t, 12.5, state.Timestamp)
 	})
 
+	t.Run("Handle Video Command Rejected for Non-Host", func(t *testing.T) {
+		msg := domain.Message{Type: "play", Timestamp: 15.0, VideoID: 1, Room: roomID, UserID: clientB.ID}
+		err := svc.HandleVideoCommand(ctx, roomID, msg)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unauthorized")
+	})
+
 	t.Run("Handle Host Change", func(t *testing.T) {
-		msg := domain.Message{Type: "grant_control", Content: clientB.ID, Room: roomID}
+		msg := domain.Message{Type: "grant_control", Content: clientB.ID, Room: roomID, UserID: clientA.ID}
 		err := svc.HandleHostChange(ctx, roomID, msg)
 		assert.NoError(t, err)
 

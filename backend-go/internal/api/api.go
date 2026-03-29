@@ -3,6 +3,8 @@ package api
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"wpbe/internal/domain"
@@ -30,6 +32,17 @@ func NewServer(rm domain.RoomManager) *Server {
 	return s
 }
 
+func getAllowedOrigins() []string {
+	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
+		parts := strings.Split(origins, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	}
+	return []string{"http://localhost:5173"}
+}
+
 func (s *Server) setupMiddleware() {
 	s.Router.Use(middleware.RequestID)
 	s.Router.Use(middleware.RealIP)
@@ -37,9 +50,9 @@ func (s *Server) setupMiddleware() {
 	s.Router.Use(middleware.Recoverer)
 
 	s.Router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://localhost:*"},
+		AllowedOrigins:   getAllowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,

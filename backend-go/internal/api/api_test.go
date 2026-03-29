@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"wpbe/internal/api"
 	"wpbe/internal/domain"
@@ -12,6 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("JWT_SECRET", "test-secret-key-for-api-tests")
+	os.Exit(m.Run())
+}
 
 // MockRoomManager implements domain.RoomManager
 type MockRoomManager struct {

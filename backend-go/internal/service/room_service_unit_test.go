@@ -68,30 +68,47 @@ func TestRoomService_HandleVideoCommand_Unit(t *testing.T) {
 		VideoID:   1,
 		Playing:   false,
 		Timestamp: 10.0,
+		Clients: map[string]domain.UserSummary{
+			"host-user": {ID: "host-user", Username: "Alice", IsHost: true},
+		},
 	}
 
-	t.Run("Play Command Updates State", func(t *testing.T) {
-		// GIVEN: Existing room state
+	t.Run("Play Command Updates State (Host)", func(t *testing.T) {
 		mockRepo.On("GetRoomState", ctx, roomID).Return(initialState, nil).Once()
 
-		// Expectation for state update
 		expectedState := &domain.RoomState{
 			VideoID:   2,
 			Playing:   true,
 			Timestamp: 45.5,
+			Clients:   initialState.Clients,
 		}
 		mockRepo.On("SaveRoomState", ctx, roomID, expectedState).Return(nil).Once()
 
-		msg := domain.Message{Type: "play", VideoID: 2, Timestamp: 45.5, Room: roomID}
+		msg := domain.Message{Type: "play", VideoID: 2, Timestamp: 45.5, Room: roomID, UserID: "host-user"}
 		mockBus.On("Publish", ctx, msg).Return(nil).Once()
 
-		// WHEN: Handling video command
 		err := svc.HandleVideoCommand(ctx, roomID, msg)
 
-		// THEN: Should update repo and publish message
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
 		mockBus.AssertExpectations(t)
+	})
+
+	t.Run("Non-Host Rejected", func(t *testing.T) {
+		stateWithGuest := &domain.RoomState{
+			VideoID: 1, Playing: false, Timestamp: 10.0,
+			Clients: map[string]domain.UserSummary{
+				"host-user":  {ID: "host-user", Username: "Alice", IsHost: true},
+				"guest-user": {ID: "guest-user", Username: "Bob", IsHost: false},
+			},
+		}
+		mockRepo.On("GetRoomState", ctx, roomID).Return(stateWithGuest, nil).Once()
+
+		msg := domain.Message{Type: "play", VideoID: 2, Timestamp: 45.5, Room: roomID, UserID: "guest-user"}
+		err := svc.HandleVideoCommand(ctx, roomID, msg)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unauthorized")
 	})
 }
 
@@ -140,19 +157,33 @@ func TestRoomService_HandleHostChange_Unit(t *testing.T) {
 		},
 	}
 
-	t.Run("Grant Control Updates Host", func(t *testing.T) {
+	t.Run("Grant Control Updates Host (by existing host)", func(t *testing.T) {
 		mockRepo.On("GetRoomState", ctx, roomID).Return(state, nil).Once()
 		mockRepo.On("SaveRoomState", ctx, roomID, mock.Anything).Return(nil).Once()
-		mockBus.On("Publish", ctx, mock.Anything).Return(nil).Twice() // host_updated and user_list
+		mockBus.On("Publish", ctx, mock.Anything).Return(nil).Twice()
 
-		msg := domain.Message{Type: "grant_control", Content: "user-2", Room: roomID}
+		msg := domain.Message{Type: "grant_control", Content: "user-2", Room: roomID, UserID: "user-1"}
 
-		// WHEN: Granting control to user-2
 		err := svc.HandleHostChange(ctx, roomID, msg)
 
-		// THEN: Should succeed
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
 		mockBus.AssertExpectations(t)
+	})
+
+	t.Run("Grant Control Rejected for Non-Host", func(t *testing.T) {
+		stateForReject := &domain.RoomState{
+			Clients: map[string]domain.UserSummary{
+				"user-1": {ID: "user-1", Username: "Alice", IsHost: true},
+				"user-2": {ID: "user-2", Username: "Bob", IsHost: false},
+			},
+		}
+		mockRepo.On("GetRoomState", ctx, roomID).Return(stateForReject, nil).Once()
+
+		msg := domain.Message{Type: "grant_control", Content: "user-2", Room: roomID, UserID: "user-2"}
+		err := svc.HandleHostChange(ctx, roomID, msg)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unauthorized")
 	})
 }

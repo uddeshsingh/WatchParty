@@ -9,6 +9,7 @@ import os
 os.environ["PUBSUB_EMULATOR_HOST"] = "localhost:8085"
 os.environ["GCP_PROJECT_ID"] = "test-project"
 os.environ["JWT_SECRET"] = "supersecret_test_key_that_is_at_least_32_characters_long"
+os.environ["GOOGLE_CLIENT_ID"] = "test-google-client-id"
 
 # Ensure we have a default DATABASE_URL if none is set
 if not os.getenv("DATABASE_URL"):
