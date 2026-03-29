@@ -1,0 +1,22 @@
+# Git / editor
+.git
+.gitignore
+.cursor
+
+# Go
+bin
+dist
+coverage.out
+*.test
+*.prof
+
+# Test-only (not required for ./cmd/server build)
+**/*_test.go
+
+# Local env
+.env
+.env.*
+
+# Docs / OS noise
+*.md
+.DS_Store

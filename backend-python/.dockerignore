@@ -1,0 +1,26 @@
+# Git / editor
+.git
+.gitignore
+.cursor
+
+# Python
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.venv
+venv
+.env
+.env.*
+
+# Test & tooling
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+tests
+
+# Build / OS noise
+*.md
+.DS_Store

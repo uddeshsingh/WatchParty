@@ -92,10 +92,22 @@ jobs:
           pytest tests -v
 
   # ----------------------------------------------------------------
-  # JOB 3: INFRASTRUCTURE SANITY CHECK
+  # JOB 3: DOCKER IMAGES BUILD
+  # ----------------------------------------------------------------
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Python image
+        run: docker build -t watchparty-api:ci ./backend-python
+      - name: Build Go image
+        run: docker build -t watchparty-ws:ci ./backend-go
+
+  # ----------------------------------------------------------------
+  # JOB 4: INFRASTRUCTURE SANITY CHECK
   # ----------------------------------------------------------------
   infrastructure-check:
-    needs: [test-go, test-python]
+    needs: [test-go, test-python, docker-build]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -120,7 +132,7 @@ jobs:
           echo "✅ Infrastructure verified."
 
   # ----------------------------------------------------------------
-  # JOB 4: DEPLOY BACKENDS (Requires Tests & Infra Check)
+  # JOB 5: DEPLOY BACKENDS (Requires Tests & Infra Check)
   # ----------------------------------------------------------------
   deploy-backends:
     needs: infrastructure-check
@@ -192,7 +204,7 @@ jobs:
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
 
   # ----------------------------------------------------------------
-  # JOB 5: DEPLOY FRONTEND
+  # JOB 6: DEPLOY FRONTEND
   # ----------------------------------------------------------------
   deploy-frontend:
     needs: deploy-backends
