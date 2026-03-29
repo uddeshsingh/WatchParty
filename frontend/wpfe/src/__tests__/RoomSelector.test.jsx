@@ -23,4 +23,16 @@ describe('RoomSelector Integration', () => {
 
     expect(handleJoin).toHaveBeenCalledWith('my-awesome-room', 'create');
   });
+
+  it('calls onLogout when Log out is clicked', () => {
+    const handleJoin = vi.fn();
+    const handleLogout = vi.fn();
+    render(
+      <RoomSelector onJoin={handleJoin} onLogout={handleLogout} username="alice" />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+
+    expect(handleLogout).toHaveBeenCalledTimes(1);
+  });
 });

@@ -89,6 +89,8 @@ const Dashboard = ({ user, onLogout }) => {
           onJoin={(name, mode) =>
             navigate(`/room/${name}`, { state: { action: mode } })
           }
+          onLogout={onLogout}
+          username={user}
         />
       )}
 

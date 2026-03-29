@@ -662,6 +662,41 @@
   text-align: center;
 }
 
+.lobby-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.lobby-user-label {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.lobby-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.lobby-logout-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  border-color: var(--text-secondary);
+}
+
 .lobby-title { font-size: 3rem; margin-bottom: 10px; color: var(--primary); }
 .lobby-subtitle { color: var(--text-secondary); margin-bottom: 40px; font-size: 1.1rem; }
 

@@ -116,7 +116,7 @@
 | :--- | :--- | :--- |
 | `App.jsx` | Root Router | Manages authentication boundary (`RequireAuth`) and routing (`/login`, `/`, `/room/:roomId`) |
 | `LoginPage.jsx` | Auth UI | Handles standard login/register and Google SSO via Python API |
-| `RoomSelector.jsx` | Lobby UI | Fetches active rooms via Go HTTP (`/rooms`), bulk metadata via Python API, allows creation/joining |
+| `RoomSelector.jsx` | Lobby UI | Fetches active rooms via Go HTTP (`/rooms`), bulk metadata via Python API, allows creation/joining; props `onJoin(name, mode)`, optional `onLogout` (clears client session via parent), optional `username` for “Signed in as …”; **Log out** control on the landing overlay (navbar sits under full-screen lobby `z-index`). |
 | `Dashboard.jsx` | Main Room Layout | Assembles Player, Sidebar, VideoList, AddVideoBar, UserList, and ReactionOverlay |
 | `VideoPlayer.jsx` | Media Engine | Mounts `react-player` (YouTube/HTML5), surfaces playback callbacks to the hook layer, and contains inline `GuestControls` for non-host volume/fullscreen |
 | `AddVideoBar.jsx` | Queue Input | Searches external video API (`vid.puffyan.us`), submits URLs to Python API (`/api/videos/add`) |

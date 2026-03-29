@@ -19,7 +19,7 @@ describe("App logout", () => {
       </GoogleOAuthProvider>,
     );
 
-    fireEvent.click(screen.getByTitle("Click to Logout"));
+    fireEvent.click(screen.getByRole("button", { name: /log out/i }));
 
     expect(localStorage.getItem("watchparty_user")).toBeNull();
     expect(localStorage.getItem("watchparty_token")).toBeNull();

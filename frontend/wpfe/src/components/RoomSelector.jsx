@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaPlus, FaDoorOpen, FaFilm, FaUserFriends } from "react-icons/fa";
+import { FaPlus, FaDoorOpen, FaFilm, FaUserFriends, FaSignOutAlt } from "react-icons/fa";
 import { WS_URL, API_URL } from "./Config";
 
-const RoomSelector = ({ onJoin }) => {
+const RoomSelector = ({ onJoin, onLogout, username }) => {
   const [rooms, setRooms] = useState([]);
   const [newRoom, setNewRoom] = useState("");
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,24 @@ const RoomSelector = ({ onJoin }) => {
   return (
     <div className="lobby-overlay">
       <div className="lobby-container">
+        {(onLogout || username) && (
+          <div className="lobby-top-bar">
+            {username ? (
+              <span className="lobby-user-label">Signed in as {username}</span>
+            ) : (
+              <span />
+            )}
+            {onLogout && (
+              <button
+                type="button"
+                className="lobby-logout-btn"
+                onClick={onLogout}
+              >
+                <FaSignOutAlt aria-hidden /> Log out
+              </button>
+            )}
+          </div>
+        )}
         <h1 className="lobby-title">Welcome to WatchParty</h1>
         <p className="lobby-subtitle">Join an active room or start your own.</p>
 
