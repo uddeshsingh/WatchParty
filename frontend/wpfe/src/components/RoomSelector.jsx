@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { FaPlus, FaDoorOpen, FaFilm, FaUserFriends, FaSignOutAlt } from "react-icons/fa";
 import { WS_URL, API_URL } from "./Config";
+import TrendingCarousel from "./TrendingCarousel";
 
 const RoomSelector = ({ onJoin, onLogout, username }) => {
   const [rooms, setRooms] = useState([]);
@@ -60,7 +61,7 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
       return;
     }
 
-    onJoin(cleanName, "create");
+    onJoin(cleanName, "create", undefined);
   };
 
   return (
@@ -86,6 +87,11 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
         )}
         <h1 className="lobby-title">Welcome to WatchParty</h1>
         <p className="lobby-subtitle">Join an active room or start your own.</p>
+
+        <TrendingCarousel
+          onPickTmdb={({ slug, preload }) => onJoin(slug, "create", preload)}
+          onPickYoutube={({ slug, preload }) => onJoin(slug, "create", preload)}
+        />
 
         <div className="create-room-section">
           <form onSubmit={handleCreate} className="create-room-form">
@@ -116,7 +122,7 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
               <div
                 key={r.name}
                 className="room-card"
-                onClick={() => onJoin(r.name, "join")}
+                onClick={() => onJoin(r.name, "join", undefined)}
               >
                 <div className="room-card-icon">
                   <FaDoorOpen />

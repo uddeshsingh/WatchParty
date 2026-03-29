@@ -1,13 +1,15 @@
 import React, { useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { FaFilm, FaCrown, FaArrowLeft, FaShareAlt } from "react-icons/fa"; // Added FaShareAlt
+import { FaFilm, FaCrown, FaArrowLeft, FaShareAlt } from "react-icons/fa";
 import { useWatchParty } from "../hooks/useWatchParty";
-import VideoPlayer from "./VideoPlayer";
+import PlayerRouter from "./PlayerRouter";
 import ChatSidebar from "./ChatSidebar";
 import VideoList from "./VideoList";
 import UserList from "./UserList";
 import RoomSelector from "./RoomSelector";
 import AddVideoBar from "./AddVideoBar";
+import RecommendationPanel from "./RecommendationPanel";
+import ProviderSelector from "./ProviderSelector";
 import ReactionOverlay from "./ReactionOverlay";
 import axios from "axios";
 import { API_URL } from "./Config";
@@ -17,6 +19,7 @@ const Dashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const hasAlerted = useRef(false);
+  const preloadConsumed = useRef(false);
   const action = location.state?.action || "join";
 
   const {
@@ -46,7 +49,69 @@ const Dashboard = ({ user, onLogout }) => {
     typingUsers,
     onEnded,
     refreshPlaylist,
+    provider,
+    providerVersion,
+    recommendations,
+    dismissRecommendation,
+    changeProvider,
+    sendRecommendVideo,
+    guestResyncEmbed,
   } = useWatchParty(roomId, action);
+
+  useEffect(() => {
+    preloadConsumed.current = false;
+  }, [roomId]);
+
+  useEffect(() => {
+    const preload = location.state?.preload;
+    if (!preload || !roomId || !isHost || preloadConsumed.current) return;
+    preloadConsumed.current = true;
+    (async () => {
+      try {
+        if (preload.youtubeUrl) {
+          await axios.post(`${API_URL}/api/videos/add`, {
+            url: preload.youtubeUrl,
+            room: roomId,
+          });
+        } else if (preload.tmdb_id != null) {
+          await axios.post(`${API_URL}/api/videos/add`, {
+            room: roomId,
+            tmdb_id: preload.tmdb_id,
+            media_type: preload.media_type,
+            title: preload.title,
+            thumbnail: preload.thumbnail,
+            ...(preload.media_type === "tv"
+              ? {
+                  season: preload.season ?? 1,
+                  episode: preload.episode ?? 1,
+                }
+              : {}),
+          });
+        }
+        sendNotification("new_video");
+        refreshPlaylist();
+        navigate(`/room/${roomId}`, {
+          replace: true,
+          state: { action: "create" },
+        });
+      } catch (err) {
+        preloadConsumed.current = false;
+        const detail = err.response?.data?.detail;
+        alert(
+          typeof detail === "string"
+            ? detail
+            : "Could not add video from trending pick.",
+        );
+      }
+    })();
+  }, [
+    roomId,
+    isHost,
+    location.state?.preload,
+    navigate,
+    refreshPlaylist,
+    sendNotification,
+  ]);
 
   useEffect(() => {
     hasAlerted.current = false;
@@ -81,13 +146,20 @@ const Dashboard = ({ user, onLogout }) => {
     if (user) setUsername(user);
   }, [user, setUsername]);
 
+  const showTmdbChrome =
+    currentVideo && currentVideo.tmdb_id != null && currentVideo.media_type;
+
   return (
     <div className="app-container">
-      {/* CHANGED: Pass navigate with state for Creation */}
       {!room && (
         <RoomSelector
-          onJoin={(name, mode) =>
-            navigate(`/room/${name}`, { state: { action: mode } })
+          onJoin={(name, mode, preload) =>
+            navigate(`/room/${name}`, {
+              state:
+                preload != null
+                  ? { action: mode, preload }
+                  : { action: mode },
+            })
           }
           onLogout={onLogout}
           username={user}
@@ -101,7 +173,6 @@ const Dashboard = ({ user, onLogout }) => {
         <div className="nav-info">
           {room && (
             <>
-              {/* CHANGED: Added Share Button */}
               <button className="nav-btn" onClick={copyLink} title="Share Room">
                 <FaShareAlt /> Share
               </button>
@@ -113,6 +184,13 @@ const Dashboard = ({ user, onLogout }) => {
                 <FaArrowLeft /> Leave
               </button>
             </>
+          )}
+          {isHost && showTmdbChrome && (
+            <ProviderSelector
+              value={provider}
+              onChange={changeProvider}
+              disabled={!room}
+            />
           )}
           {isHost && (
             <span className="badge host-badge">
@@ -136,32 +214,32 @@ const Dashboard = ({ user, onLogout }) => {
             <div className="player-container">
               <ReactionOverlay lastReaction={lastReaction} />
               {currentVideo ? (
-                <VideoPlayer
-                  ref={playerRef}
-                  url={currentVideo.video_url}
+                <PlayerRouter
+                  currentVideo={currentVideo}
                   playing={playing}
                   isHost={isHost}
+                  playerRef={playerRef}
+                  providerKey={provider}
+                  providerVersion={providerVersion}
+                  embedStartSeconds={0}
                   onReady={onReady}
                   onPlay={onPlay}
                   onPause={onPause}
                   onSeek={onSeek}
                   onEnded={onEnded}
+                  onSwitchProvider={(key) => changeProvider(key)}
+                  onGuestResync={
+                    !isHost && showTmdbChrome ? guestResyncEmbed : undefined
+                  }
                 />
               ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    color: "#666",
-                  }}
-                >
+                <div className="no-video-placeholder">
                   <FaFilm
                     size={50}
                     style={{ marginBottom: "15px", opacity: 0.5 }}
                   />
                   <h2>No video selected</h2>
-                  <p>Paste a YouTube link in the sidebar to start the party!</p>
+                  <p>Add a YouTube link or a TMDB movie/TV show in the sidebar.</p>
                 </div>
               )}
             </div>
@@ -174,8 +252,21 @@ const Dashboard = ({ user, onLogout }) => {
               isHost={isHost}
               onToggleHost={toggleHost}
             />
+            {isHost && (
+              <RecommendationPanel
+                room={room}
+                recommendations={recommendations}
+                onDismiss={dismissRecommendation}
+                onVideoAdded={() => {
+                  sendNotification("new_video");
+                  refreshPlaylist();
+                }}
+              />
+            )}
             <AddVideoBar
               room={room}
+              isHost={isHost}
+              onRecommend={(data) => sendRecommendVideo(data)}
               onVideoAdded={() => sendNotification("new_video")}
             />
             <VideoList

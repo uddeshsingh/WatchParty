@@ -69,6 +69,16 @@ func (m *MockRoomManager) HandleHostChange(ctx context.Context, roomID string, m
 	return args.Error(0)
 }
 
+func (m *MockRoomManager) HandleChangeProvider(ctx context.Context, roomID string, msg domain.Message) error {
+	args := m.Called(ctx, roomID, msg)
+	return args.Error(0)
+}
+
+func (m *MockRoomManager) HandleRecommendVideo(ctx context.Context, roomID string, msg domain.Message) error {
+	args := m.Called(ctx, roomID, msg)
+	return args.Error(0)
+}
+
 func TestServer_HealthCheck(t *testing.T) {
 	mockManager := new(MockRoomManager)
 	server := api.NewServer(mockManager, nil)

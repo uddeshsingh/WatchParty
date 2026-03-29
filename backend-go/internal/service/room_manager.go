@@ -140,6 +140,64 @@ func (s *RoomService) PublishDirectEvent(ctx context.Context, msg domain.Message
 	return s.bus.Publish(ctx, msg)
 }
 
+func effectiveProvider(state *domain.RoomState) string {
+	if state == nil || state.Provider == "" {
+		return "videasy"
+	}
+	return state.Provider
+}
+
+func (s *RoomService) HandleChangeProvider(ctx context.Context, roomID string, msg domain.Message) error {
+	switch msg.Provider {
+	case "videasy", "vidlink", "vidfast":
+	default:
+		return fmt.Errorf("invalid provider")
+	}
+	state, err := s.repo.GetRoomState(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		return fmt.Errorf("room not found")
+	}
+	if sender, ok := state.Clients[msg.UserID]; !ok || !sender.IsHost {
+		return fmt.Errorf("unauthorized: only hosts can change video provider")
+	}
+	state.Provider = msg.Provider
+	if err := s.repo.SaveRoomState(ctx, roomID, state); err != nil {
+		return err
+	}
+	out := domain.Message{
+		Type:     "change_provider",
+		Room:     roomID,
+		Username: msg.Username,
+		Provider: msg.Provider,
+	}
+	return s.bus.Publish(ctx, out)
+}
+
+// HandleRecommendVideo delivers a recommendation only to host clients (not broadcast to the room).
+func (s *RoomService) HandleRecommendVideo(_ context.Context, roomID string, msg domain.Message) error {
+	s.mu.RLock()
+	clientsMap, ok := s.localClients[roomID]
+	if !ok {
+		s.mu.RUnlock()
+		return nil
+	}
+	for _, c := range clientsMap {
+		if !c.IsHost {
+			continue
+		}
+		select {
+		case c.Send <- msg:
+		default:
+			log.Printf("Dropping recommend_video for slow host client: %s", c.ID)
+		}
+	}
+	s.mu.RUnlock()
+	return nil
+}
+
 func (s *RoomService) HandleIncomingPubSubMessage(msg domain.Message) {
 	s.mu.RLock()
 	clientsMap, hasLocalClients := s.localClients[msg.Room]
@@ -194,11 +252,15 @@ func (s *RoomService) JoinRoom(ctx context.Context, roomID, action string, clien
 
 	if state == nil {
 		state = &domain.RoomState{
-			Clients: make(map[string]domain.UserSummary),
+			Clients:  make(map[string]domain.UserSummary),
+			Provider: "videasy",
 		}
 	}
 	if state.Clients == nil {
 		state.Clients = make(map[string]domain.UserSummary)
+	}
+	if state.Provider == "" {
+		state.Provider = "videasy"
 	}
 
 	if len(state.Clients) == 0 {
@@ -219,7 +281,12 @@ func (s *RoomService) JoinRoom(ctx context.Context, roomID, action string, clien
 	}
 
 	if client.Conn != nil {
-		client.Conn.WriteJSON(domain.Message{Type: "identity", UserID: client.ID, IsHost: client.IsHost})
+		client.Conn.WriteJSON(domain.Message{
+			Type:     "identity",
+			UserID:   client.ID,
+			IsHost:   client.IsHost,
+			Provider: effectiveProvider(state),
+		})
 
 		s.bus.Publish(ctx, domain.Message{
 			Type: "request_sync",

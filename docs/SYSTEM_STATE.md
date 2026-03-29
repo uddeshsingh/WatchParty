@@ -9,9 +9,9 @@
 
 ## Global Data Models (Core Entities)
 - **`UserModel`** (`backend-python/app/repository/models.py`): Managed by Python API. Fields: `id`, `username`, `email` (nullable), `hashed_password`, `session_id` (nullable; rotated on each login/register/SSO for single active session), `created_at`. Password hashing/verification is implemented in `backend-python/app/api/auth.py`. **Existing PostgreSQL DBs:** run `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_id VARCHAR(64);` once.
-- **`VideoModel`** (`backend-python/app/repository/models.py`): Stored in PostgreSQL. Fields: `id`, `title`, `video_url`, `thumbnail` (nullable), `room` (default `"general"`), `uploaded_at`. Note: `VideoResponse` schema mirrors nullable `thumbnail` as `Optional[str]`.
-- **`domain.Message`** (`backend-go/internal/domain/types.go`): The single unified Go struct handling all WebSocket inbound/outbound payloads. Fields: `Type`, `Username`, `UserID`, `Content`, `Timestamp` (float64), `VideoID` (int), `Room`, `IsHost`, `UserList` ([]UserSummary, omitempty), `Data` (interface{}, omitempty).
-- **`domain.RoomState`** (`backend-go/internal/domain/types.go`): Redis-persisted room state. Fields: `VideoID` (int), `Timestamp` (float64), `Playing` (bool), `LastUpdated` (time.Time), `Clients` (map[string]UserSummary).
+- **`VideoModel`** (`backend-python/app/repository/models.py`): Stored in PostgreSQL. Fields: `id`, `title`, `video_url`, `thumbnail` (nullable), `room` (default `"general"`), `uploaded_at`, optional TMDB fields `tmdb_id`, `media_type` (`movie`|`tv`), `season`, `episode` (nullable for legacy YouTube rows). TMDB rows use canonical `video_url` values `tmdb://movie/{id}` or `tmdb://tv/{id}/{season}/{episode}` (not third-party stream URLs). **Migration:** [`docs/migrations/001_videos_tmdb_columns.sql`](./migrations/001_videos_tmdb_columns.sql).
+- **`domain.Message`** (`backend-go/internal/domain/types.go`): The single unified Go struct handling all WebSocket inbound/outbound payloads. Fields: `Type`, `Username`, `UserID`, `Content`, `Timestamp` (float64), `VideoID` (int), `Room`, `IsHost`, `UserList` ([]UserSummary, omitempty), `Data` (interface{}, omitempty), `Provider` (string, omitempty — embed host key `videasy`|`vidlink`|`vidfast` for `sync_state` / `change_provider` / `identity`).
+- **`domain.RoomState`** (`backend-go/internal/domain/types.go`): Redis-persisted room state. Fields: `VideoID` (int), `Timestamp` (float64), `Playing` (bool), `LastUpdated` (time.Time), `Clients` (map[string]UserSummary), `Provider` (string, default `videasy` when empty).
 - **`domain.RoomSummary`** (`backend-go/internal/domain/types.go`): Room listing payload. Fields: `Name` (string), `Count` (int), `VideoID` (int).
 - **`PubSubMessage`** (`backend-python/app/domain/schemas.py`): Pydantic model for cross-service Pub/Sub messages. Fields: `type`, `username`, `user_id`, `content`, `timestamp`, `video_id`, `room`, `is_host`, `data` (optional dict).
 
@@ -32,17 +32,24 @@
 | **Register** | `POST /api/auth/registration/` | `UserCreate` | `AuthResponse` | None | DB |
 | **Login** | `POST /api/auth/login/` | `UserLogin` | `AuthResponse` | None | DB, bcrypt |
 | **SSO Login** | `POST /api/auth/google/` | `GoogleAuth` (`backend-python/app/api/auth.py`) | `AuthResponse` | None | Google OAuth |
-| **Add Video** | `POST /api/videos/add` | `VideoCreateReq` | `VideoResponse` | Bearer JWT | DB, Scraper, PubSub |
+| **Add Video** | `POST /api/videos/add` | `VideoCreateReq` (exactly one of `url` **or** `tmdb_id`; TMDB requires `title`, `media_type`; TV requires `season`/`episode`) | `VideoResponse` | Bearer JWT | DB, Scraper (URL path), PubSub |
 | **List Videos** | `GET /api/videos` | Query: `room` (default `"general"`) | `List[VideoResponse]`| Bearer JWT | DB |
 | **Bulk Meta** | `POST /api/videos/metadata` | `MetadataReq` | `List[VideoResponse]`| Bearer JWT | VideoService → VideoRepo |
 | **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | Bearer JWT | VideoService → VideoRepo, PubSub |
+| **TMDB Search** | `GET /api/tmdb/search` | Query: `q`, `page` | `List[TMDBSearchResult]` (sanitized) | Bearer JWT | TMDB API v3 (`TMDB_API_KEY` Bearer); rate-limited per user |
+| **TMDB Trending** | `GET /api/tmdb/trending` | Query: `window` (`day`|`week`) | `List[TMDBSearchResult]` (max 20) | Bearer JWT | Same as above |
+
+### Environment
+| Variable | Role |
+| :--- | :--- |
+| `TMDB_API_KEY` | Bearer token for The Movie Database API v3 (Python). If unset, TMDB routes return 503. |
 
 ### Testing
 | Suite | Command | Dependencies |
 | :--- | :--- | :--- |
 | Local env | `conda activate wpenv`; run from `backend-python/` with `PYTHONPATH=.` | Conda env `wpenv` (local/agent runs); CI uses `pip` + `python-version` from workflow. |
 | Unit tests | `pytest tests/ -m "not integration"` | None (SQLite in-memory, mocked I/O). |
-| Integration | `pytest tests/ -m integration` | Live PostgreSQL at `DATABASE_URL`, GCP Pub/Sub or emulator. |
+| Integration | `pytest tests/ -m integration` | Live PostgreSQL at `DATABASE_URL`, GCP Pub/Sub or emulator. Optional local stack: repo root `docker compose up -d` (Postgres + Redis); default `DATABASE_URL` in `tests/conftest.py` matches compose credentials. TMDB integration covers `VideoService` + `POST /api/videos/add` with `tmdb_id` (fixtures `postgres_api_client`, `integration_user_headers` in `tests/conftest.py`). |
 
 ### Pub/Sub Listener (Background)
 | Behavior | Trigger | Action | Dependencies |
@@ -67,7 +74,7 @@
 | Suite | Command | Dependencies |
 | :--- | :--- | :--- |
 | Unit + repository mocks | `go test ./...` | None (no live Redis). |
-| Live integration | `go test -tags=integration ./...` | Redis reachable at `redis://localhost:6379` (or set `REDIS_ADDR`), GCP Pub/Sub or `PUBSUB_EMULATOR_HOST`; GitHub Actions runs this with Redis service + emulator. |
+| Live integration | `go test -tags=integration ./...` | Redis reachable at `redis://localhost:6379` (or set `REDIS_ADDR`), GCP Pub/Sub or `PUBSUB_EMULATOR_HOST`; GitHub Actions runs this with Redis service + emulator. For **Redis + in-process bus only** (no Pub/Sub): `WP_INTEGRATION_LOCAL_BUS=1 go test -tags=integration ./...`. Integration suite includes `HandleChangeProvider` persistence in Redis (`internal/service/room_manager_test.go`). |
 
 ### HTTP Routes
 | Feature | Method & Endpoint | Input | Output | Dependencies |
@@ -86,11 +93,13 @@
 | **Queue Mgmt** | `change_video` | `HandleChangeVideo` | Sets new `VideoID`, `Playing=true` in Redis, publishes via EventBus. **Host-only**: rejects non-host senders. |
 | **Social** | `chat`, `reaction`, `typing`, `new_video` | `PublishDirectEvent` | Direct pass-through publish via EventBus |
 | **Permissions** | `grant_control`, `revoke_control` | `HandleHostChange` | Updates host flag in `RoomState.Clients`, publishes `host_updated` + `user_list`. **Host-only**: rejects non-host senders. |
+| **Recommendations** | `recommend_video` | `HandleRecommendVideo` | Delivers payload to **host clients only** (not room broadcast). `Data` JSON ≤1KB; max 5/min per connection. |
+| **Provider** | `change_provider` | `HandleChangeProvider` | Host-only; allowlist `videasy`/`vidlink`/`vidfast`; updates `RoomState.Provider`, publishes `change_provider` to room via EventBus. |
 
 ### Outbound WebSocket Events (Server → Client)
 | Event Type | Emitted By | Payload Notes |
 | :--- | :--- | :--- |
-| `identity` | `JoinRoom` | Server sends `domain.Message` with only `type`, `user_id`, and `is_host` set (`room_manager.go`); other JSON fields match struct zero values (`username`/`content`/`room` empty, `timestamp` 0, `video_id` 0). Clients should use `user_id` and `is_host`; display name comes from app auth state, and room id from the WS URL. |
+| `identity` | `JoinRoom` | Server sends `domain.Message` with `type`, `user_id`, `is_host`, and `provider` (room’s `RoomState.Provider`, default `videasy`). Clients use `user_id`, `is_host`, and `provider` for embed host selection. |
 | `request_sync` | `JoinRoom` | Asks the current host to broadcast playback state |
 | `user_list` | `BroadcastUserList` | Contains `user_list` array of `UserSummary` objects |
 | `system` | `JoinRoom` / `LeaveRoom` | Content: "X joined the party!" or "X left the party." |
@@ -98,7 +107,8 @@
 | `room_empty` | `LeaveRoom` | Backend integration event published when last client leaves; consumed by Python Pub/Sub listener, not a frontend-facing room event |
 | `playlist_updated` | `HandleIncomingPubSubMessage` | Remapped from inbound Pub/Sub `video_added` events |
 | `error` | `WebSocketHandler` | Sent on validation failure or join error |
-| Pass-through | EventBus subscriber | `play`, `pause`, `seek`, `sync_state`, `change_video`, `chat`, `reaction`, `typing`, `new_video` forwarded to room clients |
+| Pass-through | EventBus subscriber | `play`, `pause`, `seek`, `sync_state`, `change_video`, `change_provider`, `chat`, `reaction`, `typing`, `new_video` forwarded to room clients |
+| `recommend_video` | `HandleRecommendVideo` | Sent only to host’s `client.Send` channel (same payload as received). |
 
 ---
 
@@ -108,7 +118,8 @@
 ### Core State & Providers
 | Hook/Service | Purpose | Inputs/Props | State/Outputs |
 | :--- | :--- | :--- | :--- |
-| `useWatchParty` | Core WS connection & Room Sync | `urlRoom` (string\|null), `action` (`"join"`\|`"create"`) | `room`, `username`, `isHost`, `userList`, `myID`, `messages`, `videos`, `currentVideo`, `playing`, `playerRef`, `typingUsers`, `lastReaction`, `error`, `setCurrentVideo`, `sendReaction`, `setUsername`, `onReady`, `onPlay`, `onPause`, `onSeek`, `sendMessage`, `toggleHost`, `sendNotification`, `changeVideo`, `sendTypingSignal`, `setRoom`, `onEnded`, `refreshPlaylist` |
+| `useWatchParty` | Core WS connection & Room Sync | `urlRoom` (string\|null), `action` (`"join"`\|`"create"`) | Above plus: `provider`, `providerVersion`, `embedStartSeconds`, `recommendations`, `dismissRecommendation`, `changeProvider`, `sendRecommendVideo`, `guestResyncEmbed`. Host `sync_state` / `play`/`pause`/`seek` include `provider`. Guests ignore `sync_state` if `msg.provider` ≠ local provider. |
+| `embedProviders.js` | TMDB iframe URL builder | `PROVIDERS`, `buildEmbedUrl`, `normalizeEmbedMessage`, `ALLOWED_EMBED_ORIGINS` | Videasy / VidLink / VidFast origins and postMessage normalization |
 | `Config.js` | Environment configuration | None | `API_URL` (Python backend), `WS_URL` (Go backend). Dev: auto-detects `hostname:8000` / `hostname:8080`. Prod: reads `VITE_API_URL`, `VITE_WS_URL` baked at CI build. GitHub Actions `deploy-backends` sets job outputs from `gcloud run services describe … --format='value(status.url)'` for `watchparty-api` and `watchparty-ws`; `deploy-frontend` uses those for `.env`. Optional repo secrets `VITE_API_URL` / `VITE_WS_URL` override (e.g. mapped custom domains). |
 
 ### UI Component Tree
@@ -116,10 +127,15 @@
 | :--- | :--- | :--- |
 | `App.jsx` | Root Router | Manages authentication boundary (`RequireAuth`) and routing (`/login`, `/`, `/room/:roomId`) |
 | `LoginPage.jsx` | Auth UI | Handles standard login/register and Google SSO via Python API |
-| `RoomSelector.jsx` | Lobby UI | Fetches active rooms via Go HTTP (`/rooms`), bulk metadata via Python API, allows creation/joining; props `onJoin(name, mode)`, optional `onLogout` (clears client session via parent), optional `username` for “Signed in as …”; **Log out** control on the landing overlay (navbar sits under full-screen lobby `z-index`). |
-| `Dashboard.jsx` | Main Room Layout | Assembles Player, Sidebar, VideoList, AddVideoBar, UserList, and ReactionOverlay |
-| `VideoPlayer.jsx` | Media Engine | Mounts `react-player` (YouTube/HTML5), surfaces playback callbacks to the hook layer, and contains inline `GuestControls` for non-host volume/fullscreen |
-| `AddVideoBar.jsx` | Queue Input | Searches external video API (`vid.puffyan.us`), submits URLs to Python API (`/api/videos/add`) |
+| `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for trending quick-start (`tmdb` fields or `youtubeUrl`). Embeds `TrendingCarousel`. Optional `onLogout`, `username`. |
+| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + Puffyan YouTube trending; click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. |
+| `Dashboard.jsx` | Main Room Layout | `PlayerRouter`, `ProviderSelector` (host, TMDB video), `RecommendationPanel` (host), `AddVideoBar` with recommend path; consumes `location.state.preload` once to `POST /api/videos/add`. |
+| `PlayerRouter.jsx` | Player selection | If `currentVideo.tmdb_id` set → `EmbedPlayer` (iframe). Else → `VideoPlayer` (`react-player`). |
+| `EmbedPlayer.jsx` | TMDB iframe player | `sandbox` iframe, origin-filtered `postMessage`, 10s load fallback with switch-host actions, guest **Re-sync** (`guestResyncEmbed`). |
+| `VideoPlayer.jsx` | Media Engine | Unchanged: `react-player` for YouTube/direct URLs. |
+| `AddVideoBar.jsx` | Queue Input | Tabs: YouTube (`vid.puffyan.us` search) vs Movies/TV (`GET /api/tmdb/search`). Host adds TMDB via `POST /api/videos/add`; guest sends `recommend_video` via `sendRecommendVideo`. |
+| `RecommendationPanel.jsx` | Host inbox | Ephemeral recommendations; dismiss; **Add to queue** → REST add + `new_video`. |
+| `ProviderSelector.jsx` | Host embed host | Dropdown → `changeProvider` → WS `change_provider`. |
 | `VideoList.jsx` | Queue UI | Renders upcoming videos, emits `change_video` events (host-only), handles delete |
 | `ChatSidebar.jsx` | Social Panel | Renders chat/system message history, emits `chat` and `typing` events, emoji reaction picker |
 | `ReactionOverlay.jsx`| Real-time UI | Displays floating emojis mapped to `reaction` events |

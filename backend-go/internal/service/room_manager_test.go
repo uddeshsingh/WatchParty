@@ -30,8 +30,14 @@ func TestRoomService_Integration(t *testing.T) {
 		projectID = "watchparty-482106"
 	}
 
-	bus, err := pubsub.NewGCPPubSub(ctx, projectID, "watchparty-events")
-	require.NoError(t, err, "Must be authenticated with GCP")
+	var bus domain.EventBus
+	if os.Getenv("WP_INTEGRATION_LOCAL_BUS") == "1" {
+		bus = pubsub.NewLocalBus()
+	} else {
+		var err error
+		bus, err = pubsub.NewGCPPubSub(ctx, projectID, "watchparty-events")
+		require.NoError(t, err, "Need GCP Pub/Sub or emulator; or set WP_INTEGRATION_LOCAL_BUS=1 for LocalBus-only")
+	}
 
 	// 3. Initialize the real service
 	svc := service.NewRoomService(repo, bus)
@@ -88,5 +94,26 @@ func TestRoomService_Integration(t *testing.T) {
 
 		state, _ := repo.GetRoomState(ctx, roomID)
 		assert.True(t, state.Clients[clientB.ID].IsHost)
+	})
+
+	providerRoom := "integration-provider-room"
+	repo.DeleteRoomState(ctx, providerRoom)
+	defer repo.DeleteRoomState(ctx, providerRoom)
+
+	t.Run("HandleChangeProvider persists in Redis", func(t *testing.T) {
+		host := &domain.Client{ID: "provider-host", Username: "PHost", Conn: nil}
+		require.NoError(t, svc.JoinRoom(ctx, providerRoom, "create", host))
+
+		err := svc.HandleChangeProvider(ctx, providerRoom, domain.Message{
+			UserID:   host.ID,
+			Username: host.Username,
+			Provider: "vidfast",
+		})
+		assert.NoError(t, err)
+
+		st, err := repo.GetRoomState(ctx, providerRoom)
+		assert.NoError(t, err)
+		require.NotNil(t, st)
+		assert.Equal(t, "vidfast", st.Provider)
 	})
 }

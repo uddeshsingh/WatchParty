@@ -169,6 +169,8 @@ func WebSocketHandler(rm domain.RoomManager, sessions domain.AuthSessionReader) 
 			ws.Close()
 		}()
 
+		var recommendTimes []time.Time
+
 		for {
 			var msg domain.Message
 			if err := ws.ReadJSON(&msg); err != nil {
@@ -178,6 +180,50 @@ func WebSocketHandler(rm domain.RoomManager, sessions domain.AuthSessionReader) 
 
 			msg.Room = roomID
 			msg.UserID = client.ID
+
+			switch msg.Type {
+			case "recommend_video":
+				if msg.Data != nil {
+					raw, mErr := json.Marshal(msg.Data)
+					if mErr != nil || len(raw) > 1024 {
+						client.Send <- domain.Message{Type: "error", Content: "recommendation payload too large"}
+						continue
+					}
+				}
+				now := time.Now()
+				var pruned []time.Time
+				for _, t := range recommendTimes {
+					if now.Sub(t) < time.Minute {
+						pruned = append(pruned, t)
+					}
+				}
+				recommendTimes = pruned
+				if len(recommendTimes) >= 5 {
+					client.Send <- domain.Message{Type: "error", Content: "Too many recommendations; wait a minute"}
+					continue
+				}
+				recommendTimes = append(recommendTimes, now)
+				if err := validate.Struct(msg); err != nil {
+					log.Printf("Validation failed: %v", err)
+					client.Send <- domain.Message{Type: "error", Content: "Invalid message format"}
+					continue
+				}
+				if err := rm.HandleRecommendVideo(r.Context(), roomID, msg); err != nil {
+					log.Printf("Recommend video failed: %v", err)
+				}
+				continue
+			case "change_provider":
+				if err := validate.Struct(msg); err != nil {
+					log.Printf("Validation failed: %v", err)
+					client.Send <- domain.Message{Type: "error", Content: "Invalid message format"}
+					continue
+				}
+				if err := rm.HandleChangeProvider(r.Context(), roomID, msg); err != nil {
+					log.Printf("Change provider failed: %v", err)
+					client.Send <- domain.Message{Type: "error", Content: err.Error()}
+				}
+				continue
+			}
 
 			if err := validate.Struct(msg); err != nil {
 				log.Printf("Validation failed: %v", err)

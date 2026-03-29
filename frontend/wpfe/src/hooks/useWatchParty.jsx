@@ -58,6 +58,16 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const pendingSync = useRef(null);
   const remoteState = useRef(null);
 
+  const [provider, setProvider] = useState("videasy");
+  const providerRef = useRef("videasy");
+  useEffect(() => {
+    providerRef.current = provider;
+  }, [provider]);
+  const [providerVersion, setProviderVersion] = useState(0);
+  const [embedStartSeconds, setEmbedStartSeconds] = useState(0);
+  const [recommendations, setRecommendations] = useState([]);
+  const syncTimestampRef = useRef(0);
+
   /** AbortSignal for in-room playlist fetches tied to the active WS session */
   const playlistAbortRef = useRef(null);
 
@@ -121,6 +131,38 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     );
   };
 
+  const changeProvider = (providerKey) => {
+    if (ws.current?.readyState !== WebSocket.OPEN || !isHostRef.current) return;
+    ws.current.send(
+      JSON.stringify({
+        type: "change_provider",
+        username: usernameRef.current,
+        room,
+        provider: providerKey,
+      }),
+    );
+  };
+
+  const sendRecommendVideo = (data) => {
+    if (ws.current?.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: "recommend_video",
+        username: usernameRef.current,
+        room,
+        data,
+      }),
+    );
+  };
+
+  const dismissRecommendation = (id) => {
+    setRecommendations((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const guestResyncEmbed = () => {
+    playerSeekTo(syncTimestampRef.current);
+  };
+
   const sendTypingSignal = () => {
     const now = Date.now();
     if (now - lastTypingTime.current < 3000) return;
@@ -135,9 +177,13 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   const handleServerMessage = (msg) => {
     if (
       msg.user_id === myIDRef.current &&
-      !["identity", "host_updated", "new_video", "change_video"].includes(
-        msg.type,
-      )
+      ![
+        "identity",
+        "host_updated",
+        "new_video",
+        "change_video",
+        "change_provider",
+      ].includes(msg.type)
     ) {
       return;
     }
@@ -148,7 +194,9 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         playerRef.current &&
         ws.current?.readyState === WebSocket.OPEN
       ) {
-        const currentTime = playerRef.current.getCurrentTime();
+        const gt = playerRef.current.getCurrentTime;
+        const currentTime =
+          typeof gt === "function" ? gt.call(playerRef.current) : 0;
         ws.current.send(
           JSON.stringify({
             type: "sync_state",
@@ -159,6 +207,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
               ? currentVideoRef.current.id
               : 0,
             content: playingRef.current ? "playing" : "paused",
+            provider: providerRef.current || "videasy",
           }),
         );
       }
@@ -172,6 +221,31 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       myIDRef.current = msg.user_id;
       setIsHost(msg.is_host);
       isHostRef.current = msg.is_host;
+      if (msg.provider) {
+        setProvider(msg.provider);
+        providerRef.current = msg.provider;
+      }
+      return;
+    }
+
+    if (msg.type === "change_provider" && msg.provider) {
+      setProvider(msg.provider);
+      providerRef.current = msg.provider;
+      setProviderVersion((v) => v + 1);
+      return;
+    }
+
+    if (msg.type === "recommend_video") {
+      if (!isHostRef.current) return;
+      setRecommendations((prev) => {
+        const entry = {
+          id: `${Date.now()}-${msg.username}-${Math.random().toString(36).slice(2, 8)}`,
+          from: msg.username,
+          data: msg.data,
+        };
+        const next = [...prev, entry];
+        return next.length > 20 ? next.slice(-20) : next;
+      });
       return;
     }
 
@@ -184,6 +258,9 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     }
 
     if (msg.type === "sync_state") {
+      if (msg.provider && msg.provider !== providerRef.current) {
+        return;
+      }
       let isChangingVideo = false;
 
       if (
@@ -224,8 +301,12 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
           playing: msg.content === "playing",
         };
       } else {
+        syncTimestampRef.current = msg.timestamp;
         playerSeekTo(msg.timestamp);
         setPlaying(msg.content === "playing");
+      }
+      if (!isHostRef.current) {
+        syncTimestampRef.current = msg.timestamp;
       }
     }
 
@@ -239,6 +320,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
             : playingRef.current,
         };
       } else {
+        syncTimestampRef.current = msg.timestamp;
         playerSeekTo(msg.timestamp);
       }
     }
@@ -253,6 +335,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
           : 0;
         if (Math.abs(currentTime - msg.timestamp) > 1.5)
           playerSeekTo(msg.timestamp);
+        syncTimestampRef.current = msg.timestamp;
         setPlaying(true);
       }
     }
@@ -262,6 +345,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       if (!isReady.current) {
         pendingSync.current = { time: msg.timestamp, playing: false };
       } else {
+        syncTimestampRef.current = msg.timestamp;
         playerSeekTo(msg.timestamp);
         setPlaying(false);
       }
@@ -382,6 +466,7 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
       username: usernameRef.current,
       timestamp: payload || 0,
       video_id: currentVideoRef.current ? currentVideoRef.current.id : 0,
+      provider: providerRef.current || "videasy",
     };
     console.log("📤 WS SEND:", payloadMsg);
     ws.current.send(JSON.stringify(payloadMsg));
@@ -456,6 +541,8 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
         "seek",
         "sync_state",
         "change_video",
+        "change_provider",
+        "recommend_video",
         "typing",
         "reaction",
         "playlist_updated",
@@ -544,5 +631,13 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     setRoom,
     onEnded,
     refreshPlaylist,
+    provider,
+    providerVersion,
+    embedStartSeconds,
+    recommendations,
+    dismissRecommendation,
+    changeProvider,
+    sendRecommendVideo,
+    guestResyncEmbed,
   };
 };

@@ -20,6 +20,8 @@ type RoomState struct {
 	Playing     bool                   `json:"playing"`
 	LastUpdated time.Time              `json:"last_updated"`
 	Clients     map[string]UserSummary `json:"clients"`
+	// Provider is the iframe embed host for TMDB-backed playback (videasy|vidlink|vidfast).
+	Provider string `json:"provider,omitempty"`
 }
 
 type RoomSummary struct {
@@ -46,4 +48,5 @@ type Message struct {
 	IsHost    bool          `json:"is_host"`
 	UserList  []UserSummary `json:"user_list,omitempty"`
 	Data      interface{}   `json:"data,omitempty"`
+	Provider  string        `json:"provider,omitempty"`
 }

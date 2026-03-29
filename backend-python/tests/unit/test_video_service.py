@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from app.service.video_service import VideoService
 from app.domain.schemas import VideoCreateReq, VideoResponse
 
@@ -133,3 +133,31 @@ def test_get_videos_metadata_empty(video_service, mock_repo):
 
     mock_repo.get_videos_by_ids.assert_called_once_with([])
     assert result == []
+
+
+def test_process_and_add_tmdb_movie(video_service, mock_repo, mock_publisher):
+    req = VideoCreateReq(
+        tmdb_id=555,
+        media_type="movie",
+        title="TMDB Film",
+        thumbnail="https://example.com/p.jpg",
+        room="cinema",
+    )
+    mock_repo.save_video.return_value = VideoResponse(
+        id=7,
+        title="TMDB Film",
+        video_url="tmdb://movie/555",
+        thumbnail="https://example.com/p.jpg",
+        room="cinema",
+        uploaded_at=datetime.now(timezone.utc),
+        tmdb_id=555,
+        media_type="movie",
+        season=None,
+        episode=None,
+    )
+    result = video_service.process_and_add_video(req)
+    assert result.tmdb_id == 555
+    mock_repo.save_video.assert_called_once()
+    call_kw = mock_repo.save_video.call_args[0][0]
+    assert call_kw["video_url"] == "tmdb://movie/555"
+    mock_publisher.broadcast_video_added.assert_called_once()

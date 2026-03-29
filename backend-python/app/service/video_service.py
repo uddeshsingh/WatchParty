@@ -15,6 +15,31 @@ class VideoService(VideoManager):
             self.publisher.broadcast_video_added(room, data)
 
     def process_and_add_video(self, req: VideoCreateReq) -> VideoResponse:
+        if req.tmdb_id is not None:
+            if req.media_type == "movie":
+                canonical = f"tmdb://movie/{req.tmdb_id}"
+            else:
+                canonical = (
+                    f"tmdb://tv/{req.tmdb_id}/{req.season}/{req.episode}"
+                )
+            thumb = (
+                req.thumbnail
+                or "https://via.placeholder.com/640x360.png?text=TMDB"
+            )
+            data = {
+                "title": req.title,
+                "video_url": canonical,
+                "thumbnail": thumb,
+                "room": req.room,
+                "tmdb_id": req.tmdb_id,
+                "media_type": req.media_type,
+                "season": req.season,
+                "episode": req.episode,
+            }
+            saved_video = self.repo.save_video(data)
+            self._broadcast(req.room, saved_video.model_dump(mode="json"))
+            return saved_video
+
         if req.title and req.thumbnail:
             data = {
                 "title": req.title,
@@ -34,7 +59,9 @@ class VideoService(VideoManager):
         else:
             metadata = fetch_video_metadata(str(req.url))
             title = metadata.get("title") or "Unknown Video"
-            thumbnail = metadata.get("thumbnail") or "https://via.placeholder.com/640x360.png?text=Video+Added"
+            thumbnail = metadata.get("thumbnail") or (
+                "https://via.placeholder.com/640x360.png?text=Video+Added"
+            )
 
         data = {
             "title": title,

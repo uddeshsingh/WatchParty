@@ -21,7 +21,7 @@ describe('RoomSelector Integration', () => {
     fireEvent.change(input, { target: { value: 'My Awesome Room' } });
     fireEvent.click(createBtn);
 
-    expect(handleJoin).toHaveBeenCalledWith('my-awesome-room', 'create');
+    expect(handleJoin).toHaveBeenCalledWith('my-awesome-room', 'create', undefined);
   });
 
   it('calls onLogout when Log out is clicked', () => {

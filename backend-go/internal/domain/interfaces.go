@@ -32,4 +32,6 @@ type RoomManager interface {
 	GetActiveRooms(ctx context.Context) ([]RoomSummary, error)
 	HandleChangeVideo(ctx context.Context, roomID string, msg Message) error
 	HandleHostChange(ctx context.Context, roomID string, msg Message) error
+	HandleChangeProvider(ctx context.Context, roomID string, msg Message) error
+	HandleRecommendVideo(ctx context.Context, roomID string, msg Message) error
 }
