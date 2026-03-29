@@ -13,3 +13,4 @@ bcrypt
 google-auth
 PyJWT
 httpx
+redis>=5.0.0

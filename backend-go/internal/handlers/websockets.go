@@ -19,7 +19,7 @@ import (
 
 var validate = validator.New()
 
-func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
+func WebSocketHandler(rm domain.RoomManager, sessions domain.AuthSessionReader) http.HandlerFunc {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET environment variable is required")
@@ -82,10 +82,14 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 		})
 
 		var username string
+		var sidClaim string
 		if err == nil && token != nil && token.Valid {
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
 				if sub, ok := claims["sub"].(string); ok {
 					username = sub
+				}
+				if s, ok := claims["sid"].(string); ok {
+					sidClaim = s
 				}
 			}
 		}
@@ -96,6 +100,23 @@ func WebSocketHandler(rm domain.RoomManager) http.HandlerFunc {
 			time.Sleep(500 * time.Millisecond)
 			ws.Close()
 			return
+		}
+
+		if sessions != nil {
+			stored, serr := sessions.GetAuthSession(r.Context(), username)
+			if serr != nil {
+				log.Printf("WS auth session lookup failed: %v", serr)
+				ws.WriteJSON(domain.Message{Type: "error", Content: "Session validation failed"})
+				time.Sleep(500 * time.Millisecond)
+				ws.Close()
+				return
+			}
+			if stored != "" && (sidClaim == "" || sidClaim != stored) {
+				ws.WriteJSON(domain.Message{Type: "error", Content: "Session expired. Please log in again."})
+				time.Sleep(500 * time.Millisecond)
+				ws.Close()
+				return
+			}
 		}
 
 		ws.SetReadDeadline(time.Time{})

@@ -16,15 +16,17 @@ import (
 
 // Server holds all injected dependencies for the HTTP layer
 type Server struct {
-	Router      *chi.Mux
-	RoomManager domain.RoomManager
+	Router       *chi.Mux
+	RoomManager  domain.RoomManager
+	AuthSessions domain.AuthSessionReader
 }
 
 // NewServer acts as our DI container for the API
-func NewServer(rm domain.RoomManager) *Server {
+func NewServer(rm domain.RoomManager, authSessions domain.AuthSessionReader) *Server {
 	s := &Server{
-		Router:      chi.NewRouter(),
-		RoomManager: rm,
+		Router:       chi.NewRouter(),
+		RoomManager:  rm,
+		AuthSessions: authSessions,
 	}
 	s.setupMiddleware()
 	s.setupRoutes()
@@ -60,7 +62,7 @@ func (s *Server) setupMiddleware() {
 }
 
 func (s *Server) setupRoutes() {
-	s.Router.Get("/ws", handlers.WebSocketHandler(s.RoomManager))
+	s.Router.Get("/ws", handlers.WebSocketHandler(s.RoomManager, s.AuthSessions))
 
 	s.Router.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(60 * time.Second))

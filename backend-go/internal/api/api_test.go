@@ -71,7 +71,7 @@ func (m *MockRoomManager) HandleHostChange(ctx context.Context, roomID string, m
 
 func TestServer_HealthCheck(t *testing.T) {
 	mockManager := new(MockRoomManager)
-	server := api.NewServer(mockManager)
+	server := api.NewServer(mockManager, nil)
 
 	req, _ := http.NewRequest("GET", "/health", nil)
 	rr := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestServer_HealthCheck(t *testing.T) {
 
 func TestServer_GetRooms(t *testing.T) {
 	mockManager := new(MockRoomManager)
-	server := api.NewServer(mockManager)
+	server := api.NewServer(mockManager, nil)
 
 	rooms := []domain.RoomSummary{
 		{Name: "room1", Count: 5},
@@ -97,7 +97,7 @@ func TestServer_GetRooms(t *testing.T) {
 	server.Router.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	
+
 	var response []domain.RoomSummary
 	err := json.Unmarshal(rr.Body.Bytes(), &response)
 	assert.NoError(t, err)

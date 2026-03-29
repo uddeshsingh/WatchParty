@@ -120,3 +120,12 @@ func (r *RedisRepo) GetActiveRooms(ctx context.Context) ([]domain.RoomSummary, e
 	}
 	return summaries, nil
 }
+
+// GetAuthSession returns the active JWT session id mirrored by the Python API (empty if unset).
+func (r *RedisRepo) GetAuthSession(ctx context.Context, username string) (string, error) {
+	s, err := r.client.Get(ctx, "wp:sess:"+username).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	return s, err
+}

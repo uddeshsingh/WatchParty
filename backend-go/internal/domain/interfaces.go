@@ -2,6 +2,11 @@ package domain
 
 import "context"
 
+// AuthSessionReader returns the active login session id for a username (Redis mirror of Python DB).
+type AuthSessionReader interface {
+	GetAuthSession(ctx context.Context, username string) (string, error)
+}
+
 // RoomRepository defines how room state is persisted (e.g., Redis)
 type RoomRepository interface {
 	GetRoomState(ctx context.Context, roomID string) (*RoomState, error)

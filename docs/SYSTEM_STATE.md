@@ -8,7 +8,7 @@
 - **Message Broker (`backend-go/internal/pubsub/` & Python `app/pubsub/`)**: Primary transport is Google Cloud Pub/Sub (`watchparty-events` topic); Go falls back to in-memory `LocalBus` when Pub/Sub initialization fails.
 
 ## Global Data Models (Core Entities)
-- **`UserModel`** (`backend-python/app/repository/models.py`): Managed by Python API. Fields: `id`, `username`, `email` (nullable), `hashed_password`, `created_at`. Password hashing/verification is implemented in `backend-python/app/api/auth.py`.
+- **`UserModel`** (`backend-python/app/repository/models.py`): Managed by Python API. Fields: `id`, `username`, `email` (nullable), `hashed_password`, `session_id` (nullable; rotated on each login/register/SSO for single active session), `created_at`. Password hashing/verification is implemented in `backend-python/app/api/auth.py`. **Existing PostgreSQL DBs:** run `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_id VARCHAR(64);` once.
 - **`VideoModel`** (`backend-python/app/repository/models.py`): Stored in PostgreSQL. Fields: `id`, `title`, `video_url`, `thumbnail` (nullable), `room` (default `"general"`), `uploaded_at`. Note: `VideoResponse` schema mirrors nullable `thumbnail` as `Optional[str]`.
 - **`domain.Message`** (`backend-go/internal/domain/types.go`): The single unified Go struct handling all WebSocket inbound/outbound payloads. Fields: `Type`, `Username`, `UserID`, `Content`, `Timestamp` (float64), `VideoID` (int), `Room`, `IsHost`, `UserList` ([]UserSummary, omitempty), `Data` (interface{}, omitempty).
 - **`domain.RoomState`** (`backend-go/internal/domain/types.go`): Redis-persisted room state. Fields: `VideoID` (int), `Timestamp` (float64), `Playing` (bool), `LastUpdated` (time.Time), `Clients` (map[string]UserSummary).
@@ -21,8 +21,8 @@
 *Primary source of truth: Pydantic schemas in `backend-python/app/domain/schemas.py`; note that `GoogleAuth` is currently defined inline in `backend-python/app/api/auth.py`.*
 
 ### Authentication & Authorization
-- **JWT tokens** include `exp` claim (24h TTL). Tokens are issued by `create_token()` in `auth.py`.
-- **`get_current_user`** (`backend-python/app/api/auth.py`): FastAPI `Depends()` guard using `HTTPBearer`. Validates JWT from `Authorization: Bearer <token>` header. Returns username or raises 401.
+- **JWT tokens** include `sub` (username), `sid` (session id, matches `UserModel.session_id`), and `exp` (24h TTL). Issued by `create_token()` in `auth.py`. **Single active session:** each successful login/register/Google auth rotates `session_id` and mirrors it to Redis key `wp:sess:{username}` (when `REDIS_ADDR` is set) so the Go WebSocket server can reject stale tokens; prior JWTs return 401 on REST and fail WS auth when Redis holds the new session.
+- **`get_current_user`** (`backend-python/app/api/auth.py`): Validates JWT and, if `user.session_id` is set, requires `sid` claim to match (legacy rows with `session_id` NULL still accept old unsigned tokens until the user logs in again).
 - **CORS**: Controlled by `ALLOWED_ORIGINS`. Comma-separated origins with `allow_credentials=True`, or set exactly `*` for `Access-Control-Allow-Origin: *` and `allow_credentials=False` (works with JWT in `Authorization`; use for public Cloud Run). Defaults to `http://localhost:5173`. Implemented via `resolve_cors_settings()` in `backend-python/app/cors_settings.py`.
 - **Google SSO**: Requires `GOOGLE_CLIENT_ID` env var; returns 503 if unset. SSO users get a random `!sso:<hex>` hash as password placeholder (never matches bcrypt verification).
 
@@ -76,7 +76,7 @@
 | **Health** | `GET /health` | None | `{"status":"healthy"}` | None |
 
 ### WebSocket Connection (`/ws`)
-*Query params:* `?room={id}&action={join/create}` — `room` defaults to `"general"`, `action` defaults to `"join"`. Authentication uses **first-message auth**: the client sends `{type: "auth", token: "<jwt>"}` as the first WebSocket message after connection. JWT `sub` is parsed using `JWT_SECRET` with explicit HMAC-SHA256 signing method verification. Read limit is 64KB per message.
+*Query params:* `?room={id}&action={join/create}` — `room` defaults to `"general"`, `action` defaults to `"join"`. Authentication uses **first-message auth**: the client sends `{type: "auth", token: "<jwt>"}` as the first WebSocket message after connection. JWT `sub` and `sid` are parsed using `JWT_SECRET` (HMAC-SHA256). If Redis has `wp:sess:{username}` and it does not match `sid`, the connection is rejected. Read limit is 64KB per message.
 
 ### Inbound WebSocket Events (Client → Server)
 | Action Category | Event Types (`msg.Type`) | Handler | Effect |
@@ -90,7 +90,7 @@
 ### Outbound WebSocket Events (Server → Client)
 | Event Type | Emitted By | Payload Notes |
 | :--- | :--- | :--- |
-| `identity` | `JoinRoom` | Contains `user_id` and `is_host` for the connecting client |
+| `identity` | `JoinRoom` | Server sends `domain.Message` with only `type`, `user_id`, and `is_host` set (`room_manager.go`); other JSON fields match struct zero values (`username`/`content`/`room` empty, `timestamp` 0, `video_id` 0). Clients should use `user_id` and `is_host`; display name comes from app auth state, and room id from the WS URL. |
 | `request_sync` | `JoinRoom` | Asks the current host to broadcast playback state |
 | `user_list` | `BroadcastUserList` | Contains `user_list` array of `UserSummary` objects |
 | `system` | `JoinRoom` / `LeaveRoom` | Content: "X joined the party!" or "X left the party." |

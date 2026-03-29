@@ -14,32 +14,73 @@ def test_hash_and_verify_password():
 
 def test_create_token():
     username = "test-user"
-    token = create_token(username)
-    
+    sid = "sessid-test-user-aaaaaaaaaaaa"
+    token = create_token(username, sid)
+
     payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     assert payload["sub"] == username
+    assert payload["sid"] == sid
     assert "exp" in payload
 
-def test_get_current_user_valid_token():
+
+def test_get_current_user_valid_token(db_session):
     from unittest.mock import MagicMock
-    token = create_token("alice")
+    from app.repository.models import UserModel
+
+    sid = "sessid-alice-aaaaaaaaaaaaaaaa"
+    user = UserModel(
+        username="alice",
+        email="alice@example.com",
+        hashed_password=hash_password("pw"),
+        session_id=sid,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    token = create_token("alice", sid)
     creds = MagicMock()
     creds.credentials = token
-    assert get_current_user(creds) == "alice"
+    assert get_current_user(credentials=creds, db=db_session) == "alice"
+
+
+def test_get_current_user_stale_session_rejected(db_session):
+    from unittest.mock import MagicMock
+    from fastapi import HTTPException
+    from app.repository.models import UserModel
+
+    db_session.add(
+        UserModel(
+            username="bob",
+            email="bob@example.com",
+            hashed_password=hash_password("pw"),
+            session_id="current-session-id-123456789012",
+        )
+    )
+    db_session.commit()
+
+    token = create_token("bob", "old-session-id-12345678901234")
+    creds = MagicMock()
+    creds.credentials = token
+    with pytest.raises(HTTPException) as exc:
+        get_current_user(credentials=creds, db=db_session)
+    assert exc.value.status_code == 401
 
 def test_get_current_user_missing_credentials():
     from fastapi import HTTPException
+    from unittest.mock import MagicMock
+
     with pytest.raises(HTTPException) as excinfo:
-        get_current_user(None)
+        get_current_user(credentials=None, db=MagicMock())
     assert excinfo.value.status_code == 401
 
-def test_get_current_user_invalid_token():
+def test_get_current_user_invalid_token(db_session):
     from fastapi import HTTPException
     from unittest.mock import MagicMock
+
     creds = MagicMock()
     creds.credentials = "bad.token.here"
     with pytest.raises(HTTPException) as excinfo:
-        get_current_user(creds)
+        get_current_user(credentials=creds, db=db_session)
     assert excinfo.value.status_code == 401
 
 @patch("app.api.auth.id_token.verify_oauth2_token")

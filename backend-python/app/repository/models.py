@@ -9,6 +9,8 @@ class UserModel(Base):
     username = Column(String(150), unique=True, index=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
+    # Rotated on each login; JWT must carry matching "sid" claim (single active session).
+    session_id = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
 

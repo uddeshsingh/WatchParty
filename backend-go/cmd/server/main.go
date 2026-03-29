@@ -50,7 +50,7 @@ func main() {
 	}()
 
 	// 6. Initialize API with Injected Service
-	server := api.NewServer(roomService)
+	server := api.NewServer(roomService, redisRepo)
 
 	// 7. Start Server
 	if err := server.Serve(port); err != nil {

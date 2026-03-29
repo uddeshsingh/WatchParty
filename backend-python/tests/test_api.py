@@ -11,9 +11,31 @@ from app.repository.models import UserModel, VideoModel
 client = TestClient(app)
 
 
-def _integration_auth_headers() -> dict:
-    token = create_token("integration_test_user")
+def _integration_auth_headers(db_session) -> dict:
+    from app.repository.models import UserModel
+    from app.api.auth import hash_password
+
+    sid = "integration-test-session-id-fixed-1"
+    u = (
+        db_session.query(UserModel)
+        .filter(UserModel.username == "integration_test_user")
+        .first()
+    )
+    if not u:
+        u = UserModel(
+            username="integration_test_user",
+            email="integration@test.dev",
+            hashed_password=hash_password("x"),
+            session_id=sid,
+        )
+        db_session.add(u)
+    else:
+        u.session_id = sid
+    db_session.commit()
+    db_session.refresh(u)
+    token = create_token("integration_test_user", sid)
     return {"Authorization": f"Bearer {token}"}
+
 
 def test_register_user_actual_db():
     unique_username = f"testuser_{uuid.uuid4().hex[:6]}"
@@ -31,9 +53,44 @@ def test_register_user_actual_db():
     assert data["user"]["username"] == unique_username
     assert "id" in data["user"]
 
+
+def test_second_login_invalidates_prior_token():
+    """Each login issues a new session_id; older JWTs must fail on protected routes."""
+    unique_username = f"twosess_{uuid.uuid4().hex[:6]}"
+    reg = client.post(
+        "/api/auth/registration/",
+        json={
+            "username": unique_username,
+            "email": f"{unique_username}@test.com",
+            "password1": "securepass",
+            "password2": "securepass",
+        },
+    )
+    assert reg.status_code == 200
+    token_first = reg.json()["token"]
+
+    login_again = client.post(
+        "/api/auth/login/",
+        json={"username": unique_username, "password": "securepass"},
+    )
+    assert login_again.status_code == 200
+    token_second = login_again.json()["token"]
+
+    stale = client.get(
+        "/api/videos?room=general",
+        headers={"Authorization": f"Bearer {token_first}"},
+    )
+    assert stale.status_code == 401
+
+    fresh = client.get(
+        "/api/videos?room=general",
+        headers={"Authorization": f"Bearer {token_second}"},
+    )
+    assert fresh.status_code == 200
+
 def test_add_and_fetch_video_actual_db(db_session):
     room_name = "test_integration_room"
-    headers = _integration_auth_headers()
+    headers = _integration_auth_headers(db_session)
 
     # 1. Add a video (metadata/pubsub may be mocked by conftest)
     response = client.post(

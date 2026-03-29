@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { FaPlus, FaDoorOpen, FaFilm } from "react-icons/fa";
+import { FaPlus, FaDoorOpen, FaFilm, FaUserFriends } from "react-icons/fa";
 import { WS_URL, API_URL } from "./Config";
 
 const RoomSelector = ({ onJoin }) => {

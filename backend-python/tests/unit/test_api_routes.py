@@ -12,8 +12,21 @@ def mock_service():
     return MagicMock()
 
 @pytest.fixture
-def auth_headers():
-    token = create_token("test-user")
+def auth_headers(db_session):
+    from app.repository.models import UserModel
+    from app.api.auth import hash_password
+
+    sid = "unit-test-session-id-for-api-routes-1"
+    db_session.add(
+        UserModel(
+            username="test-user",
+            email="test-user@example.com",
+            hashed_password=hash_password("pw"),
+            session_id=sid,
+        )
+    )
+    db_session.commit()
+    token = create_token("test-user", sid)
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
