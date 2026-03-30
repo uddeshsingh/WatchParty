@@ -42,7 +42,7 @@ describe('WatchParty UI Integration', () => {
     fireEvent.click(screen.getByRole('button', { name: /log in/i }));
 
     // 2. Create Room
-    const roomInput = await screen.findByPlaceholderText(/create new room name/i);
+    const roomInput = await screen.findByRole('textbox', { name: /new room name/i });
     fireEvent.change(roomInput, { target: { value: 'IntegrationTestRoom' } });
     fireEvent.click(screen.getByRole('button', { name: /create/i }));
 

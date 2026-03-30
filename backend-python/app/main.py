@@ -11,6 +11,62 @@ from app.repository.database import engine, Base
 from app.cors_settings import resolve_cors_settings
 
 
+# #region agent log
+class _AgentDebugRequestLogMiddleware:
+    """Append one NDJSON line per HTTP request (local workspace log only)."""
+
+    def __init__(self, app, allow_any: bool, explicit_origins: list[str]):
+        self.app = app
+        self._allow_any = allow_any
+        self._explicit_origins = explicit_origins
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        raw = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        origin = raw.get("origin")
+        path = scope.get("path", "")
+        status_holder: dict[str, int | None] = {"code": None}
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                status_holder["code"] = message.get("status")
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+        try:
+            import json
+            import time
+
+            payload = {
+                "sessionId": "fc90b6",
+                "hypothesisId": "H1-H2-H4",
+                "location": "main.py:_AgentDebugRequestLogMiddleware",
+                "message": "http_response",
+                "data": {
+                    "path": path,
+                    "origin": origin,
+                    "status": status_holder["code"],
+                    "cors_allow_any": self._allow_any,
+                    "cors_explicit_origins": self._explicit_origins,
+                },
+                "timestamp": int(time.time() * 1000),
+                "runId": "pre-fix",
+            }
+            with open(
+                "/Users/uddeshsingh/Documents/WatchParty/.cursor/debug-fc90b6.log",
+                "a",
+                encoding="utf-8",
+            ) as f:
+                f.write(json.dumps(payload) + "\n")
+        except OSError:
+            pass
+
+
+# #endregion
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -59,6 +115,12 @@ else:
         allow_headers=["Accept", "Authorization", "Content-Type"],
         allow_credentials=True,
     )
+
+app.add_middleware(
+    _AgentDebugRequestLogMiddleware,
+    allow_any=_allow_any,
+    explicit_origins=_explicit_origins,
+)
 
 app.include_router(video_router)
 app.include_router(auth_router)

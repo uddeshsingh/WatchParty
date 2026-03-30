@@ -2,6 +2,27 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_URL } from "./Config";
 
+// #region agent log
+function agentDebugLog(location, message, data, hypothesisId) {
+  fetch("http://127.0.0.1:7859/ingest/4626e31c-52ce-43de-9f4c-5482f6247f78", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "fc90b6",
+    },
+    body: JSON.stringify({
+      sessionId: "fc90b6",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+      runId: "pre-fix",
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 const TMDB_IMG = "https://image.tmdb.org/t/p/w300";
 
 function randomRoomSlug(prefix) {
@@ -21,8 +42,26 @@ const TrendingCarousel = ({ onPickTmdb, onPickYoutube }) => {
         const res = await axios.get(`${API_URL}/api/tmdb/trending`, {
           params: { window: "day" },
         });
+        agentDebugLog(
+          "TrendingCarousel.jsx:tmdb",
+          "tmdb trending ok",
+          { apiUrl: API_URL, count: (res.data || []).length },
+          "H3",
+        );
         if (!cancelled) setTmdb((res.data || []).slice(0, 12));
-      } catch {
+      } catch (err) {
+        agentDebugLog(
+          "TrendingCarousel.jsx:tmdb",
+          "tmdb trending failed",
+          {
+            apiUrl: API_URL,
+            hasToken: !!localStorage.getItem("watchparty_token"),
+            status: err.response?.status,
+            code: err.code,
+            msg: String(err.message || err),
+          },
+          "H1-H3-H4",
+        );
         if (!cancelled) {
           setTmdb([]);
           setTmdbErr(true);
@@ -42,8 +81,24 @@ const TrendingCarousel = ({ onPickTmdb, onPickYoutube }) => {
           "https://vid.puffyan.us/api/v1/trending?type=movies&region=US",
         );
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
+        agentDebugLog(
+          "TrendingCarousel.jsx:puffyan",
+          "puffyan ok",
+          { count: list.length },
+          "H5",
+        );
         if (!cancelled) setYt(list.slice(0, 12));
-      } catch {
+      } catch (err) {
+        agentDebugLog(
+          "TrendingCarousel.jsx:puffyan",
+          "puffyan failed",
+          {
+            status: err.response?.status,
+            code: err.code,
+            msg: String(err.message || err),
+          },
+          "H5",
+        );
         if (!cancelled) setYt([]);
       }
     })();
@@ -55,9 +110,12 @@ const TrendingCarousel = ({ onPickTmdb, onPickYoutube }) => {
   return (
     <div className="trending-sections">
       <section className="trending-row">
-        <h2 className="trending-heading">Trending on TMDB</h2>
+        <div className="trending-row-head">
+          <h3 className="trending-heading">TMDB</h3>
+          <span className="trending-badge">Movies &amp; TV</span>
+        </div>
         {tmdbErr && (
-          <p className="trending-hint">TMDB trending unavailable.</p>
+          <p className="trending-hint">Trending list unavailable—try search inside a room.</p>
         )}
         <div className="trending-scroll">
           {tmdb.map((item) => (
@@ -93,7 +151,10 @@ const TrendingCarousel = ({ onPickTmdb, onPickYoutube }) => {
       </section>
 
       <section className="trending-row">
-        <h2 className="trending-heading">Trending on YouTube</h2>
+        <div className="trending-row-head">
+          <h3 className="trending-heading">YouTube</h3>
+          <span className="trending-badge trending-badge--yt">Trailers &amp; clips</span>
+        </div>
         <div className="trending-scroll">
           {yt.map((v) => (
             <button

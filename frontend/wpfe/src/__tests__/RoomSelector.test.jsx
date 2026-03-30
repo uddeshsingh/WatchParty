@@ -15,7 +15,7 @@ describe('RoomSelector Integration', () => {
     const handleJoin = vi.fn();
     render(<RoomSelector onJoin={handleJoin} />);
 
-    const input = screen.getByPlaceholderText('Create new room name...');
+    const input = screen.getByRole('textbox', { name: /new room name/i });
     const createBtn = screen.getByRole('button', { name: /create/i });
 
     fireEvent.change(input, { target: { value: 'My Awesome Room' } });

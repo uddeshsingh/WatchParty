@@ -45,7 +45,7 @@ describe('WatchParty Full System Integration', () => {
     fireEvent.click(loginBtn);
 
     // 2. Lobby Phase
-    const roomInput = await screen.findByPlaceholderText(/create new room name/i);
+    const roomInput = await screen.findByRole('textbox', { name: /new room name/i });
     const createBtn = screen.getByRole('button', { name: /create/i });
 
     fireEvent.change(roomInput, { target: { value: 'IntegrationTestRoom' } });

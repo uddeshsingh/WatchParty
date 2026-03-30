@@ -48,7 +48,7 @@
 | Suite | Command | Dependencies |
 | :--- | :--- | :--- |
 | Local env | `conda activate wpenv`; run from `backend-python/` with `PYTHONPATH=.` | Conda env `wpenv` (local/agent runs); CI uses `pip` + `python-version` from workflow. |
-| Unit tests | `pytest tests/ -m "not integration"` | None (SQLite in-memory, mocked I/O). |
+| Unit tests | `pytest tests/ -m "not integration"` | None (SQLite in-memory, mocked I/O). Includes `tests/test_cors_http.py`: OPTIONS preflight + `GET /api/tmdb/trending` without auth must still return `Access-Control-Allow-Origin` for the configured browser origin (catches “CORS missing” masking 401/5xx). |
 | Integration | `pytest tests/ -m integration` | Live PostgreSQL at `DATABASE_URL`, GCP Pub/Sub or emulator. Optional local stack: repo root `docker compose up -d` (Postgres + Redis); default `DATABASE_URL` in `tests/conftest.py` matches compose credentials. TMDB integration covers `VideoService` + `POST /api/videos/add` with `tmdb_id` (fixtures `postgres_api_client`, `integration_user_headers` in `tests/conftest.py`). |
 
 ### Pub/Sub Listener (Background)
@@ -127,8 +127,8 @@
 | :--- | :--- | :--- |
 | `App.jsx` | Root Router | Manages authentication boundary (`RequireAuth`) and routing (`/login`, `/`, `/room/:roomId`) |
 | `LoginPage.jsx` | Auth UI | Handles standard login/register and Google SSO via Python API |
-| `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for trending quick-start (`tmdb` fields or `youtubeUrl`). Embeds `TrendingCarousel`. Optional `onLogout`, `username`. |
-| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + Puffyan YouTube trending; click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. |
+| `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for trending quick-start (`tmdb` fields or `youtubeUrl`). Embeds `TrendingCarousel`. Optional `onLogout`, `username`. Lobby layout: hero (gradient title), section panels (discover / create / live parties), skeleton loading for room list, `button.room-card` for join. |
+| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + Puffyan YouTube trending; click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. Row headers with TMDB/YouTube badges and horizontal scroll with snap. |
 | `Dashboard.jsx` | Main Room Layout | `PlayerRouter`, `ProviderSelector` (host, TMDB video), `RecommendationPanel` (host), `AddVideoBar` with recommend path; consumes `location.state.preload` once to `POST /api/videos/add`. |
 | `PlayerRouter.jsx` | Player selection | If `currentVideo.tmdb_id` set → `EmbedPlayer` (iframe). Else → `VideoPlayer` (`react-player`). |
 | `EmbedPlayer.jsx` | TMDB iframe player | `sandbox` iframe, origin-filtered `postMessage`, 10s load fallback with switch-host actions, guest **Re-sync** (`guestResyncEmbed`). |

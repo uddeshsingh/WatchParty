@@ -66,11 +66,15 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
 
   return (
     <div className="lobby-overlay">
+      <div className="lobby-backdrop" aria-hidden />
       <div className="lobby-container">
         {(onLogout || username) && (
-          <div className="lobby-top-bar">
+          <header className="lobby-top-bar">
             {username ? (
-              <span className="lobby-user-label">Signed in as {username}</span>
+              <span className="lobby-user-pill">
+                <span className="lobby-user-dot" aria-hidden />
+                <span className="lobby-user-label">{username}</span>
+              </span>
             ) : (
               <span />
             )}
@@ -83,66 +87,111 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
                 <FaSignOutAlt aria-hidden /> Log out
               </button>
             )}
-          </div>
+          </header>
         )}
-        <h1 className="lobby-title">Welcome to WatchParty</h1>
-        <p className="lobby-subtitle">Join an active room or start your own.</p>
 
-        <TrendingCarousel
-          onPickTmdb={({ slug, preload }) => onJoin(slug, "create", preload)}
-          onPickYoutube={({ slug, preload }) => onJoin(slug, "create", preload)}
-        />
-
-        <div className="create-room-section">
-          <form onSubmit={handleCreate} className="create-room-form">
-            <input
-              type="text"
-              placeholder="Create new room name..."
-              value={newRoom}
-              onChange={(e) => setNewRoom(e.target.value)}
-              className="create-input"
-            />
-            <button type="submit" className="create-btn">
-              <FaPlus /> Create
-            </button>
-          </form>
+        <div className="lobby-hero">
+          <p className="lobby-eyebrow">Watch together</p>
+          <h1 className="lobby-title">WatchParty</h1>
+          <p className="lobby-subtitle">
+            Pick something trending, spin up a room, or join a live party.
+          </p>
         </div>
 
-        <div className="room-grid-label">Active Rooms ({rooms.length})</div>
-
-        {loading ? (
-          <div className="loading-spinner">Loading rooms...</div>
-        ) : (
-          <div className="room-grid">
-            {rooms.length === 0 && (
-              <div className="no-rooms">No active parties. Be the first!</div>
-            )}
-
-            {rooms.map((r) => (
-              <div
-                key={r.name}
-                className="room-card"
-                onClick={() => onJoin(r.name, "join", undefined)}
-              >
-                <div className="room-card-icon">
-                  <FaDoorOpen />
-                </div>
-                <div className="room-card-name">{r.name}</div>
-                
-                {/* Cleaned up metadata container */}
-                <div className="room-card-meta">
-                  <FaFilm style={{flexShrink: 0}} /> 
-                  <span className="meta-text">{r.videoTitle || 'Idle'}</span>
-                </div>
-
-                <div className="room-card-stats">
-                  <FaUserFriends /> {r.count}{" "}
-                  {r.count === 1 ? "Viewer" : "Viewers"}
-                </div>
-              </div>
-            ))}
+        <section className="lobby-section" aria-labelledby="lobby-discover-heading">
+          <div className="lobby-section-head">
+            <h2 id="lobby-discover-heading" className="lobby-section-title">
+              Jump in
+            </h2>
+            <p className="lobby-section-desc">
+              Start a room preloaded with a hit from TMDB or YouTube.
+            </p>
           </div>
-        )}
+          <div className="lobby-panel lobby-panel--discover">
+            <TrendingCarousel
+              onPickTmdb={({ slug, preload }) => onJoin(slug, "create", preload)}
+              onPickYoutube={({ slug, preload }) => onJoin(slug, "create", preload)}
+            />
+          </div>
+        </section>
+
+        <section className="lobby-section" aria-labelledby="lobby-create-heading">
+          <div className="lobby-section-head">
+            <h2 id="lobby-create-heading" className="lobby-section-title">
+              Start a room
+            </h2>
+            <p className="lobby-section-desc">
+              Name it anything you like—friends join with the same slug.
+            </p>
+          </div>
+          <div className="lobby-panel lobby-panel--create">
+            <form onSubmit={handleCreate} className="create-room-form">
+              <input
+                type="text"
+                placeholder="e.g. friday-movie-night"
+                value={newRoom}
+                onChange={(e) => setNewRoom(e.target.value)}
+                className="create-input"
+                aria-label="New room name"
+              />
+              <button type="submit" className="create-btn">
+                <FaPlus aria-hidden /> Create
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="lobby-section" aria-labelledby="lobby-live-heading">
+          <div className="lobby-section-head lobby-section-head--inline">
+            <h2 id="lobby-live-heading" className="lobby-section-title">
+              Live parties
+            </h2>
+            <span className="lobby-live-count">{rooms.length} active</span>
+          </div>
+
+          {loading ? (
+            <div className="lobby-skeleton-grid" aria-busy="true" aria-label="Loading rooms">
+              {[1, 2, 3].map((k) => (
+                <div key={k} className="lobby-skeleton-card">
+                  <div className="lobby-skeleton-shimmer" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="room-grid">
+              {rooms.length === 0 && (
+                <div className="no-rooms">
+                  <FaDoorOpen className="no-rooms-icon" aria-hidden />
+                  <p>No one is live yet—create a room and invite friends.</p>
+                </div>
+              )}
+
+              {rooms.map((r) => (
+                <button
+                  key={r.name}
+                  type="button"
+                  className="room-card"
+                  onClick={() => onJoin(r.name, "join", undefined)}
+                >
+                  <div className="room-card-icon">
+                    <FaDoorOpen aria-hidden />
+                  </div>
+                  <div className="room-card-name">{r.name}</div>
+                  <div className="room-card-meta">
+                    <FaFilm aria-hidden className="room-card-meta-icon" />
+                    <span className="meta-text">{r.videoTitle || "Idle"}</span>
+                  </div>
+                  <div className="room-card-stats">
+                    <FaUserFriends aria-hidden />
+                    <span>
+                      {r.count} {r.count === 1 ? "viewer" : "viewers"}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
