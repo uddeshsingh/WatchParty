@@ -179,6 +179,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
             EXTRA_ALLOWED_ORIGINS=https://watchparty-482106.web.app
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}

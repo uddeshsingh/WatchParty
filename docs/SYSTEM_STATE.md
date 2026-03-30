@@ -38,14 +38,12 @@
 | **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | Bearer JWT | VideoService → VideoRepo, PubSub |
 | **TMDB Search** | `GET /api/tmdb/search` | Query: `q`, `page` | `List[TMDBSearchResult]` (sanitized) | Bearer JWT | TMDB API v3 (`TMDB_API_KEY` Bearer); rate-limited per user |
 | **TMDB Trending** | `GET /api/tmdb/trending` | Query: `window` (`day`|`week`) | `List[TMDBSearchResult]` (max 20) | Bearer JWT | Same as above |
-| **YouTube trending (proxy)** | `GET /api/youtube/trending` | None | JSON (upstream Puffyan shape: list or `{ items }`) | Bearer JWT | Server-side `httpx` to `PUFFYAN_TRENDING_URL` or default `vid.puffyan.us` trending API (avoids browser CORS) |
 
 ### Environment
 | Variable | Role |
 | :--- | :--- |
-| `TMDB_API_KEY` | Bearer token for The Movie Database API v3 (Python). If unset, TMDB routes return 503. |
+| `TMDB_API_KEY` | Bearer token for The Movie Database API v3 (Python). If unset, TMDB routes return **503**. GitHub Actions `deploy-backends` passes `secrets.TMDB_API_KEY` into Cloud Run `watchparty-api`—create that repo secret with your TMDB v3 API read token. |
 | `EXTRA_ALLOWED_ORIGINS` | Optional comma-separated origins merged into `ALLOWED_ORIGINS` when not using `*`. CI deploy sets Firebase Hosting `https://watchparty-482106.web.app`. |
-| `PUFFYAN_TRENDING_URL` | Optional override for lobby YouTube trending proxy (default Puffyan trending URL). |
 
 ### Testing
 | Suite | Command | Dependencies |
@@ -130,8 +128,8 @@
 | :--- | :--- | :--- |
 | `App.jsx` | Root Router | Manages authentication boundary (`RequireAuth`) and routing (`/login`, `/`, `/room/:roomId`) |
 | `LoginPage.jsx` | Auth UI | Handles standard login/register and Google SSO via Python API |
-| `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for trending quick-start (`tmdb` fields or `youtubeUrl`). Embeds `TrendingCarousel`. Optional `onLogout`, `username`. Lobby layout: hero (gradient title), section panels (discover / create / live parties), skeleton loading for room list, `button.room-card` for join. |
-| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + `GET /api/youtube/trending` (server proxy); click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. Row headers with TMDB/YouTube badges and horizontal scroll with snap. |
+| `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for TMDB trending quick-start. Embeds `TrendingCarousel`. Optional `onLogout`, `username`. Lobby layout: hero (gradient title), section panels (discover / create / live parties), skeleton loading for room list, `button.room-card` for join. |
+| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending`; click creates room via `onPickTmdb` with generated slug and TMDB `preload` payload. |
 | `Dashboard.jsx` | Main Room Layout | `PlayerRouter`, `ProviderSelector` (host, TMDB video), `RecommendationPanel` (host), `AddVideoBar` with recommend path; consumes `location.state.preload` once to `POST /api/videos/add`. |
 | `PlayerRouter.jsx` | Player selection | If `currentVideo.tmdb_id` set → `EmbedPlayer` (iframe). Else → `VideoPlayer` (`react-player`). |
 | `EmbedPlayer.jsx` | TMDB iframe player | `sandbox` iframe, origin-filtered `postMessage`, 10s load fallback with switch-host actions, guest **Re-sync** (`guestResyncEmbed`). |

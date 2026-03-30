@@ -94,7 +94,7 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
           <p className="lobby-eyebrow">Watch together</p>
           <h1 className="lobby-title">WatchParty</h1>
           <p className="lobby-subtitle">
-            Pick something trending, spin up a room, or join a live party.
+            Pick a trending title, spin up a room, or join a live party.
           </p>
         </div>
 
@@ -104,13 +104,12 @@ const RoomSelector = ({ onJoin, onLogout, username }) => {
               Jump in
             </h2>
             <p className="lobby-section-desc">
-              Start a room preloaded with a hit from TMDB or YouTube.
+              Start a room preloaded with a trending pick from TMDB.
             </p>
           </div>
           <div className="lobby-panel lobby-panel--discover">
             <TrendingCarousel
               onPickTmdb={({ slug, preload }) => onJoin(slug, "create", preload)}
-              onPickYoutube={({ slug, preload }) => onJoin(slug, "create", preload)}
             />
           </div>
         </section>

@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router as video_router, get_db, get_video_service
 from app.api.auth import router as auth_router
 from app.api.tmdb import router as tmdb_router
-from app.api.youtube_trending import router as youtube_trending_router
 from app.pubsub.gcp_listener import GCPPubSubListener
 from app.repository.database import engine, Base
 from app.cors_settings import resolve_cors_settings
@@ -129,4 +128,3 @@ if os.getenv("WP_DEBUG_INGEST_LOG") == "1":
 app.include_router(video_router)
 app.include_router(auth_router)
 app.include_router(tmdb_router)
-app.include_router(youtube_trending_router)
