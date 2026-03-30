@@ -51,6 +51,8 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     playingRef.current = playing;
   }, [playing]);
   const ws = useRef(null);
+  /** Bumps on each room (re)connect so stale WebSocket `onmessage` cannot append to chat after `setMessages([])` is still batched. */
+  const wsSessionRef = useRef(0);
   const lastTypingTime = useRef(0);
   const typingTimeout = useRef({});
 
@@ -477,10 +479,31 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
   }, [urlRoom]);
 
   useEffect(() => {
+    const wsSession = ++wsSessionRef.current;
+
+    isReady.current = false;
+    pendingSync.current = null;
+    remoteState.current = null;
+    syncTimestampRef.current = 0;
+
     setVideos([]);
     setCurrentVideo(null);
     setPlaying(false);
     setError(null);
+    setMessages([]);
+    setTypingUsers([]);
+    Object.values(typingTimeout.current).forEach((id) => clearTimeout(id));
+    typingTimeout.current = {};
+    setRecommendations([]);
+    setLastReaction(null);
+    setUserList([]);
+    setMyID(null);
+    myIDRef.current = null;
+    setIsHost(false);
+    isHostRef.current = false;
+    setProvider("videasy");
+    providerRef.current = "videasy";
+    setProviderVersion((v) => v + 1);
 
     const token = localStorage.getItem("watchparty_token");
     if (!room || !username || !token) {
@@ -512,6 +535,8 @@ export const useWatchParty = (urlRoom = null, action = "join") => {
     };
 
     ws.current.onmessage = (event) => {
+      if (wsSession !== wsSessionRef.current) return;
+
       const msg = JSON.parse(event.data);
 
       if (msg.type === "user_list") {
