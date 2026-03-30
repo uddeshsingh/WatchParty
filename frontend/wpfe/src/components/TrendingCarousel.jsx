@@ -4,6 +4,7 @@ import { API_URL } from "./Config";
 
 // #region agent log
 function agentDebugLog(location, message, data, hypothesisId) {
+  if (!import.meta.env.DEV) return;
   fetch("http://127.0.0.1:7859/ingest/4626e31c-52ce-43de-9f4c-5482f6247f78", {
     method: "POST",
     headers: {
@@ -77,9 +78,7 @@ const TrendingCarousel = ({ onPickTmdb, onPickYoutube }) => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await axios.get(
-          "https://vid.puffyan.us/api/v1/trending?type=movies&region=US",
-        );
+        const res = await axios.get(`${API_URL}/api/youtube/trending`);
         const list = Array.isArray(res.data) ? res.data : res.data?.items || [];
         agentDebugLog(
           "TrendingCarousel.jsx:puffyan",

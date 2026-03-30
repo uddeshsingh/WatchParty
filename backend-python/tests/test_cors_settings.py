@@ -7,6 +7,7 @@ from app.cors_settings import resolve_cors_settings
 def _clear_allowed_origins(monkeypatch):
     monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
     monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.delenv("EXTRA_ALLOWED_ORIGINS", raising=False)
 
 
 def test_default_localhost(monkeypatch):
@@ -53,3 +54,31 @@ def test_cloud_run_empty_allowed_origins_is_allow_any(monkeypatch):
     allow_any, origins = resolve_cors_settings()
     assert allow_any is True
     assert origins == []
+
+
+def test_extra_allowed_origins_appended(monkeypatch):
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://a.example.com")
+    monkeypatch.setenv(
+        "EXTRA_ALLOWED_ORIGINS",
+        "https://b.example.com, https://c.example.com ",
+    )
+    allow_any, origins = resolve_cors_settings()
+    assert allow_any is False
+    assert origins == [
+        "https://a.example.com",
+        "https://b.example.com",
+        "https://c.example.com",
+    ]
+
+
+def test_extra_origins_deduped(monkeypatch):
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.setenv(
+        "ALLOWED_ORIGINS",
+        "https://a.example.com,https://b.example.com",
+    )
+    monkeypatch.setenv("EXTRA_ALLOWED_ORIGINS", "https://b.example.com")
+    allow_any, origins = resolve_cors_settings()
+    assert allow_any is False
+    assert origins == ["https://a.example.com", "https://b.example.com"]

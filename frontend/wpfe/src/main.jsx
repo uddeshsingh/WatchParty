@@ -2,12 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import axios from 'axios';
-import './index.css'
 import App from './App.jsx'
 
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('watchparty_token');
-  if (token && !config.url?.startsWith('https://vid.puffyan.us')) {
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

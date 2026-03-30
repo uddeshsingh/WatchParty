@@ -180,6 +180,7 @@ jobs:
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
+            EXTRA_ALLOWED_ORIGINS=https://watchparty-482106.web.app
             REDIS_ADDR=${{ secrets.REDIS_ADDR }}
 
       - name: Resolve Python API URL (gcloud)
@@ -218,6 +219,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}
+            EXTRA_ALLOWED_ORIGINS=https://watchparty-482106.web.app
 
       - name: Resolve WebSocket service URL (gcloud)
         id: resolve-ws-url

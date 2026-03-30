@@ -23,7 +23,7 @@
 ### Authentication & Authorization
 - **JWT tokens** include `sub` (username), `sid` (session id, matches `UserModel.session_id`), and `exp` (24h TTL). Issued by `create_token()` in `auth.py`. **Single active session:** each successful login/register/Google auth rotates `session_id` and mirrors it to Redis key `wp:sess:{username}` (when `REDIS_ADDR` is set) so the Go WebSocket server can reject stale tokens; prior JWTs return 401 on REST and fail WS auth when Redis holds the new session.
 - **`get_current_user`** (`backend-python/app/api/auth.py`): Validates JWT and, if `user.session_id` is set, requires `sid` claim to match (legacy rows with `session_id` NULL still accept old unsigned tokens until the user logs in again).
-- **CORS**: Controlled by `ALLOWED_ORIGINS`. Comma-separated origins with `allow_credentials=True`, or set exactly `*` for `Access-Control-Allow-Origin: *` and `allow_credentials=False` (works with JWT in `Authorization`; use for public Cloud Run). Defaults to `http://localhost:5173`. Implemented via `resolve_cors_settings()` in `backend-python/app/cors_settings.py`.
+- **CORS**: Controlled by `ALLOWED_ORIGINS`. Comma-separated origins with `allow_credentials=True`, or set exactly `*` for `Access-Control-Allow-Origin: *` and `allow_credentials=False` (works with JWT in `Authorization`; use for public Cloud Run). Defaults to `http://localhost:5173`. **`EXTRA_ALLOWED_ORIGINS`** (comma-separated) is merged onto any explicit list so deploy can add Firebase Hosting (`https://watchparty-482106.web.app`) without replacing the whole secret. Empty `ALLOWED_ORIGINS` on Cloud Run (`K_SERVICE` set) still defaults to allow-any. Implemented via `resolve_cors_settings()` in `backend-python/app/cors_settings.py`.
 - **Google SSO**: Requires `GOOGLE_CLIENT_ID` env var; returns 503 if unset. SSO users get a random `!sso:<hex>` hash as password placeholder (never matches bcrypt verification).
 
 ### Active Routes & Core Functions
@@ -38,11 +38,14 @@
 | **Delete** | `DELETE /api/videos/{video_id}`| Path: `video_id`, Query: `room` (required) | `{"status": "deleted"}` | Bearer JWT | VideoService → VideoRepo, PubSub |
 | **TMDB Search** | `GET /api/tmdb/search` | Query: `q`, `page` | `List[TMDBSearchResult]` (sanitized) | Bearer JWT | TMDB API v3 (`TMDB_API_KEY` Bearer); rate-limited per user |
 | **TMDB Trending** | `GET /api/tmdb/trending` | Query: `window` (`day`|`week`) | `List[TMDBSearchResult]` (max 20) | Bearer JWT | Same as above |
+| **YouTube trending (proxy)** | `GET /api/youtube/trending` | None | JSON (upstream Puffyan shape: list or `{ items }`) | Bearer JWT | Server-side `httpx` to `PUFFYAN_TRENDING_URL` or default `vid.puffyan.us` trending API (avoids browser CORS) |
 
 ### Environment
 | Variable | Role |
 | :--- | :--- |
 | `TMDB_API_KEY` | Bearer token for The Movie Database API v3 (Python). If unset, TMDB routes return 503. |
+| `EXTRA_ALLOWED_ORIGINS` | Optional comma-separated origins merged into `ALLOWED_ORIGINS` when not using `*`. CI deploy sets Firebase Hosting `https://watchparty-482106.web.app`. |
+| `PUFFYAN_TRENDING_URL` | Optional override for lobby YouTube trending proxy (default Puffyan trending URL). |
 
 ### Testing
 | Suite | Command | Dependencies |
@@ -128,7 +131,7 @@
 | `App.jsx` | Root Router | Manages authentication boundary (`RequireAuth`) and routing (`/login`, `/`, `/room/:roomId`) |
 | `LoginPage.jsx` | Auth UI | Handles standard login/register and Google SSO via Python API |
 | `RoomSelector.jsx` | Lobby UI | `onJoin(name, mode, preload?)` — third arg optional `preload` for trending quick-start (`tmdb` fields or `youtubeUrl`). Embeds `TrendingCarousel`. Optional `onLogout`, `username`. Lobby layout: hero (gradient title), section panels (discover / create / live parties), skeleton loading for room list, `button.room-card` for join. |
-| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + Puffyan YouTube trending; click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. Row headers with TMDB/YouTube badges and horizontal scroll with snap. |
+| `TrendingCarousel.jsx` | Lobby discovery | `GET /api/tmdb/trending` + `GET /api/youtube/trending` (server proxy); click creates room via `onPickTmdb` / `onPickYoutube` with generated slug and `preload` payload. Row headers with TMDB/YouTube badges and horizontal scroll with snap. |
 | `Dashboard.jsx` | Main Room Layout | `PlayerRouter`, `ProviderSelector` (host, TMDB video), `RecommendationPanel` (host), `AddVideoBar` with recommend path; consumes `location.state.preload` once to `POST /api/videos/add`. |
 | `PlayerRouter.jsx` | Player selection | If `currentVideo.tmdb_id` set → `EmbedPlayer` (iframe). Else → `VideoPlayer` (`react-player`). |
 | `EmbedPlayer.jsx` | TMDB iframe player | `sandbox` iframe, origin-filtered `postMessage`, 10s load fallback with switch-host actions, guest **Re-sync** (`guestResyncEmbed`). |
